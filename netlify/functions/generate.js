@@ -33,7 +33,7 @@ exports.handler = async function (event, context) {
 
     const generationConfig = {
       temperature: 0.8,
-      maxOutputTokens: 1200,
+      maxOutputTokens: 1500,
     };
 
     if (expectJson) {

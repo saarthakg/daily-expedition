@@ -19,11 +19,9 @@
       --ink-faint: #c8c3bc;
       --paper: #f9f6f0;
       --paper-warm: #f2ede4;
-      --paper-card: #ffffff;
-      --accent: #8b1a1a;
-      --accent-light: #c9433a;
       --rule: #d8d2c8;
-      --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
+      --accent: #8b1a1a;
+      --font-display: 'Playfair Display', Georgia, serif;
       --font-body: 'Source Serif 4', Georgia, serif;
       --max: 680px;
       --pad: clamp(1.25rem, 5vw, 2.5rem);
@@ -37,23 +35,18 @@
         --ink-faint: #3a3630;
         --paper: #18160f;
         --paper-warm: #1e1b12;
-        --paper-card: #221f16;
         --accent: #c9433a;
-        --accent-light: #e06055;
         --rule: #2e2b22;
       }
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     html { font-size: 16px; -webkit-text-size-adjust: 100%; }
-
     body {
       font-family: var(--font-body);
       background: var(--paper);
       color: var(--ink);
       min-height: 100dvh;
-      line-height: 1.7;
       -webkit-font-smoothing: antialiased;
     }
 
@@ -63,9 +56,7 @@
       padding: 0 var(--pad);
     }
 
-    /* ── Masthead ── */
     .masthead {
-      padding-top: env(safe-area-inset-top, 0px);
       padding-top: max(1.5rem, calc(env(safe-area-inset-top) + 1rem));
     }
 
@@ -89,14 +80,11 @@
     }
 
     .masthead-date {
-      font-family: var(--font-body);
       font-size: 12px;
       color: var(--ink-light);
       font-style: italic;
-      white-space: nowrap;
     }
 
-    /* ── Views ── */
     #view-main, #view-explore {
       padding-top: 2rem;
       padding-bottom: max(3rem, calc(env(safe-area-inset-bottom) + 2rem));
@@ -104,21 +92,16 @@
 
     #view-explore { display: none; }
 
-    /* ── Section labels ── */
     .eyebrow {
-      font-family: var(--font-body);
       font-size: 10px;
       letter-spacing: 0.22em;
       text-transform: uppercase;
       color: var(--ink-light);
-      font-weight: 400;
       margin-bottom: 0.75rem;
     }
 
-    /* ── Doorway ── */
     .domain-pill {
       display: inline-block;
-      font-family: var(--font-body);
       font-size: 10px;
       letter-spacing: 0.14em;
       text-transform: uppercase;
@@ -148,18 +131,12 @@
 
     .doorway-body p + p { margin-top: 0.85rem; }
 
-    /* ── Rule ── */
     .section-rule {
       border: none;
       border-top: 1px solid var(--rule);
       margin: 2rem 0;
     }
 
-    .section-rule.thick {
-      border-top: 1px solid var(--ink-faint);
-    }
-
-    /* ── Questions list ── */
     .questions-list { list-style: none; }
 
     .question-row {
@@ -169,15 +146,14 @@
       padding: 1rem 0;
       border-bottom: 1px solid var(--rule);
       cursor: pointer;
-      transition: opacity 0.15s;
       -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.15s;
     }
 
     .question-row:first-child { border-top: 1px solid var(--rule); }
     .question-row:active { opacity: 0.6; }
 
     .question-tag {
-      font-family: var(--font-body);
       font-size: 10px;
       letter-spacing: 0.14em;
       text-transform: uppercase;
@@ -188,34 +164,25 @@
     }
 
     .question-text {
-      font-family: var(--font-body);
       font-size: clamp(14px, 2.2vw, 16px);
       line-height: 1.5;
       color: var(--ink);
-      font-weight: 400;
       flex: 1;
     }
 
     .question-arrow {
       color: var(--ink-faint);
-      font-size: 18px;
       padding-top: 1px;
       flex-shrink: 0;
-      transition: transform 0.15s;
+      transition: transform 0.15s, color 0.15s;
     }
 
-    .question-row:hover .question-arrow,
-    .question-row:active .question-arrow {
-      transform: translateX(3px);
-      color: var(--accent);
-    }
+    .question-row:hover .question-arrow { transform: translateX(3px); color: var(--accent); }
 
-    /* ── Explore view ── */
     .back-btn {
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      font-family: var(--font-body);
       font-size: 11px;
       letter-spacing: 0.16em;
       text-transform: uppercase;
@@ -230,8 +197,6 @@
     }
 
     .back-btn:hover { color: var(--ink); }
-
-    .back-arrow { font-size: 14px; }
 
     .explore-question {
       font-family: var(--font-display);
@@ -264,7 +229,6 @@
       line-height: 1.3;
     }
 
-    /* ── Detours ── */
     .detour-section {
       margin-top: 2.5rem;
       padding-top: 1.25rem;
@@ -272,7 +236,6 @@
     }
 
     .detour-label {
-      font-family: var(--font-body);
       font-size: 10px;
       letter-spacing: 0.2em;
       text-transform: uppercase;
@@ -280,11 +243,7 @@
       margin-bottom: 0.85rem;
     }
 
-    .detour-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
+    .detour-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
     .detour-chip {
       font-family: var(--font-body);
@@ -300,16 +259,9 @@
       -webkit-tap-highlight-color: transparent;
     }
 
-    .detour-chip:hover {
-      border-color: var(--ink-mid);
-      color: var(--ink);
-    }
+    .detour-chip:hover { border-color: var(--ink-mid); color: var(--ink); }
+    .detour-chip:active { background: var(--paper-warm); }
 
-    .detour-chip:active {
-      background: var(--paper-warm);
-    }
-
-    /* ── Reflection box ── */
     .reflection {
       margin-top: 2.5rem;
       padding: 1.25rem 1.5rem;
@@ -321,7 +273,6 @@
       font-family: var(--font-display);
       font-size: clamp(15px, 2.5vw, 17px);
       font-style: italic;
-      font-weight: 400;
       color: var(--ink);
       line-height: 1.5;
       margin-bottom: 0.5rem;
@@ -334,7 +285,6 @@
       line-height: 1.6;
     }
 
-    /* ── Loading skeleton ── */
     .skeleton {
       background: var(--paper-warm);
       border-radius: 2px;
@@ -346,26 +296,12 @@
       50% { opacity: 0.9; }
     }
 
-    .sk-headline {
-      height: 32px;
-      width: 88%;
-      margin-bottom: 10px;
-    }
-
-    .sk-headline-2 {
-      height: 32px;
-      width: 62%;
-      margin-bottom: 20px;
-    }
-
-    .sk-line {
-      height: 14px;
-      margin-bottom: 10px;
-    }
-
-    .sk-short { width: 85%; }
-    .sk-full  { width: 100%; }
-    .sk-mid   { width: 72%; }
+    .sk-hl  { height: 32px; width: 88%; margin-bottom: 10px; }
+    .sk-hl2 { height: 32px; width: 62%; margin-bottom: 20px; }
+    .sk-ln  { height: 14px; margin-bottom: 10px; }
+    .w-100  { width: 100%; }
+    .w-85   { width: 85%; }
+    .w-72   { width: 72%; }
 
     .sk-row {
       display: flex;
@@ -374,12 +310,10 @@
       border-bottom: 1px solid var(--rule);
       align-items: center;
     }
-
     .sk-row:first-child { border-top: 1px solid var(--rule); }
     .sk-tag { height: 10px; width: 70px; flex-shrink: 0; }
-    .sk-q { height: 14px; flex: 1; }
+    .sk-q   { height: 14px; flex: 1; }
 
-    /* ── Error ── */
     .error-msg {
       font-size: 15px;
       color: var(--ink-light);
@@ -394,14 +328,13 @@
       font-size: 12px;
       opacity: 0.6;
       font-style: normal;
+      word-break: break-all;
     }
   </style>
 </head>
 
 <body>
   <div class="page">
-
-    <!-- Masthead -->
     <header class="masthead">
       <div class="masthead-inner">
         <span class="masthead-title">The Daily Expedition</span>
@@ -409,52 +342,39 @@
       </div>
     </header>
 
-    <!-- Main view: doorway + questions -->
     <main id="view-main">
-
-      <!-- Doorway -->
-      <section id="js-doorway">
-        <div class="skeleton sk-headline"></div>
-        <div class="skeleton sk-headline-2"></div>
-        <div class="skeleton sk-line sk-full"></div>
-        <div class="skeleton sk-line sk-short"></div>
-        <div class="skeleton sk-line sk-full"></div>
-        <div class="skeleton sk-line sk-mid"></div>
-        <div class="skeleton sk-line sk-short"></div>
+      <section id="js-doorway" style="padding-top:2rem">
+        <div class="skeleton sk-hl"></div>
+        <div class="skeleton sk-hl2"></div>
+        <div class="skeleton sk-ln w-100"></div>
+        <div class="skeleton sk-ln w-85"></div>
+        <div class="skeleton sk-ln w-100"></div>
+        <div class="skeleton sk-ln w-72"></div>
       </section>
 
-      <hr class="section-rule thick" style="margin-top: 2rem;" />
+      <hr class="section-rule" style="margin-top:2rem" />
 
-      <!-- Questions -->
-      <section>
+      <section style="padding-bottom:3rem">
         <p class="eyebrow">Threads worth pulling</p>
         <ul class="questions-list" id="js-questions">
           <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q"></div></li>
-          <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q" style="width:60%"></div></li>
-          <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q" style="width:80%"></div></li>
-          <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q" style="width:55%"></div></li>
-          <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q" style="width:75%"></div></li>
-          <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q" style="width:65%"></div></li>
+          <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q w-85"></div></li>
+          <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q w-72"></div></li>
+          <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q w-85"></div></li>
+          <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q"></div></li>
+          <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q w-72"></div></li>
         </ul>
       </section>
-
     </main>
 
-    <!-- Explore view: deep dive on a question -->
-    <div id="view-explore">
-      <button class="back-btn" onclick="showMain()" aria-label="Back to today's expedition">
-        <span class="back-arrow">←</span> Today's expedition
-      </button>
+    <div id="view-explore" style="padding-top:2rem;padding-bottom:max(3rem,calc(env(safe-area-inset-bottom)+2rem))">
+      <button class="back-btn" onclick="showMain()">← Today's expedition</button>
       <div id="js-explore-content"></div>
     </div>
-
-  </div><!-- /page -->
+  </div>
 
   <script>
-    // ─── State ───────────────────────────────────────────────────────────────
-    let expedition = null;   // { headline, domain_tag, doorway, questions[] }
-    let activeQ    = null;   // index of current question
-    let activeD    = null;   // current detour label or null
+    let expedition = null;
 
     const DETOURS = [
       'Simply explained',
@@ -465,14 +385,14 @@
       'Second-order effects',
     ];
 
-    // ─── Date ────────────────────────────────────────────────────────────────
-    (function setDate() {
+    // Date
+    (function() {
       const d = new Date();
-      const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-      document.getElementById('js-date').textContent = d.toLocaleDateString('en-US', opts);
+      document.getElementById('js-date').textContent =
+        d.toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
     })();
 
-    // ─── API helpers ─────────────────────────────────────────────────────────
+    // API calls
     async function fetchNews() {
       const res = await fetch('/.netlify/functions/news');
       if (!res.ok) throw new Error('News fetch failed: ' + res.status);
@@ -481,11 +401,11 @@
       return data.news || [];
     }
 
-    async function callGemini(systemPrompt, userPrompt, expectJson = false) {
+    async function callGemini(systemPrompt, userPrompt, expectJson) {
       const res = await fetch('/.netlify/functions/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemPrompt, userPrompt, expectJson }),
+        body: JSON.stringify({ systemPrompt, userPrompt, expectJson: !!expectJson }),
       });
       if (!res.ok) throw new Error('Gemini call failed: ' + res.status);
       const data = await res.json();
@@ -493,28 +413,39 @@
       return data.text || '';
     }
 
-    // ─── Build expedition ────────────────────────────────────────────────────
-    async function buildExpedition(articles) {
-      const digest = articles
-        .slice(0, 20)
-        .map((a, i) => `${i + 1}. [${(a.category || []).join(', ')}] ${a.title}`)
-        .join('\n');
+    // Parse JSON robustly — strips markdown fences if present
+    function parseJson(raw) {
+      // Try direct parse first
+      try { return JSON.parse(raw); } catch (_) {}
+      // Strip markdown fences and retry
+      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+      try { return JSON.parse(stripped); } catch (_) {}
+      // Extract first {...} block and retry
+      const match = stripped.match(/\{[\s\S]*\}/);
+      if (match) return JSON.parse(match[0]);
+      throw new Error('Could not parse JSON from Gemini response.');
+    }
 
-      const today = new Date().toDateString();
+    // Build expedition from headlines
+    async function buildExpedition(articles) {
+      const digest = articles.slice(0, 20)
+        .map((a, i) => `${i+1}. [${(a.category||[]).join(', ')}] ${a.title}`)
+        .join('\n');
 
       const systemPrompt = `You are the editor of The Daily Expedition — a calm, intellectually serious daily briefing. Your reader is educated and broadly curious across geopolitics, economics, technology, science, energy, infrastructure, history, and culture.
 
-Today is ${today}. You have been given a list of real headlines from today's news. Your task:
-
-1. Choose the single most intellectually rich story — one that connects to larger systems, has historical depth, and opens multiple avenues of exploration. Avoid pure politics or sports.
+Today is ${new Date().toDateString()}. You have been given a list of real headlines from today's news. Your task:
+1. Choose the single most intellectually rich story — one that connects to larger systems, has historical depth, and opens multiple avenues of exploration. Avoid sports and pure celebrity news.
 2. Write a compelling doorway into that story.
 3. Generate six genuinely interesting questions it opens.
 
-Respond ONLY with valid JSON — no markdown, no backticks, no explanation before or after:
+You MUST respond with only a valid JSON object. No explanation, no markdown, no code fences. Raw JSON only.
+
+Schema:
 {
-  "headline": "A sharp, newspaper-quality headline (not clickbait, not a question)",
+  "headline": "A sharp newspaper-quality headline",
   "domain_tag": "one of: Geopolitics | Economics | Technology | Science | Energy | Infrastructure | Culture | History",
-  "doorway": "Three to four sentences. Set the scene with authority. What happened, why it matters to the wider world, what is genuinely uncertain or consequential. Write like a senior correspondent, not a press release. No bullet points.",
+  "doorway": "Three to four sentences. Set the scene with authority. What happened, why it matters, what is genuinely uncertain. Write like a senior correspondent.",
   "questions": [
     { "tag": "Historical",   "text": "A question about how history led to this moment" },
     { "tag": "Systemic",     "text": "A question about the larger system or mechanism at play" },
@@ -525,133 +456,103 @@ Respond ONLY with valid JSON — no markdown, no backticks, no explanation befor
   ]
 }`;
 
-      const userPrompt = `Here are today's headlines. Choose the best doorway and generate the expedition:\n\n${digest}`;
-
+      const userPrompt = `Here are today's headlines. Choose the best doorway and generate the expedition JSON:\n\n${digest}`;
       const raw = await callGemini(systemPrompt, userPrompt, true);
-
-      // Strip any accidental markdown fences
-      const cleaned = raw.replace(/```json|```/gi, '').trim();
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error('No JSON found in Gemini response.');
-      return JSON.parse(match[0]);
+      return parseJson(raw);
     }
 
-    // ─── Render doorway ──────────────────────────────────────────────────────
+    // Render
     function renderDoorway(data) {
       document.getElementById('js-doorway').innerHTML = `
-        <p class="eyebrow" style="margin-bottom:0.6rem">Today's doorway</p>
-        <span class="domain-pill">${data.domain_tag}</span>
-        <h1 class="doorway-headline">${escHtml(data.headline)}</h1>
-        <div class="doorway-body"><p>${escHtml(data.doorway)}</p></div>
+        <p class="eyebrow">Today's doorway</p>
+        <span class="domain-pill">${esc(data.domain_tag)}</span>
+        <h1 class="doorway-headline">${esc(data.headline)}</h1>
+        <div class="doorway-body"><p>${esc(data.doorway)}</p></div>
       `;
     }
 
-    // ─── Render questions ────────────────────────────────────────────────────
     function renderQuestions(data) {
-      const items = data.questions.map((q, i) => `
+      document.getElementById('js-questions').innerHTML = data.questions.map((q, i) => `
         <li class="question-row" onclick="openQuestion(${i})" role="button" tabindex="0"
-            aria-label="Explore: ${escHtml(q.text)}"
-            onkeydown="if(event.key==='Enter'||event.key===' ')openQuestion(${i})">
-          <span class="question-tag">${escHtml(q.tag)}</span>
-          <span class="question-text">${escHtml(q.text)}</span>
-          <span class="question-arrow" aria-hidden="true">→</span>
+            onkeydown="if(event.key==='Enter')openQuestion(${i})">
+          <span class="question-tag">${esc(q.tag)}</span>
+          <span class="question-text">${esc(q.text)}</span>
+          <span class="question-arrow">→</span>
         </li>
       `).join('');
-      document.getElementById('js-questions').innerHTML = items;
     }
 
-    // ─── Open a question ─────────────────────────────────────────────────────
     async function openQuestion(idx, detour) {
-      activeQ = idx;
-      activeD = detour || null;
-
       const q = expedition.questions[idx];
 
-      // Switch view
       document.getElementById('view-main').style.display = 'none';
       document.getElementById('view-explore').style.display = 'block';
       window.scrollTo({ top: 0, behavior: 'instant' });
 
-      // Show loading state
+      const label = detour ? `${detour} — ${q.text}` : q.text;
+
       document.getElementById('js-explore-content').innerHTML = `
-        <p class="explore-question">${escHtml(detour ? detour + ' — ' + q.text : q.text)}</p>
-        <div class="skeleton sk-line sk-full" style="margin-bottom:10px"></div>
-        <div class="skeleton sk-line sk-short" style="margin-bottom:10px"></div>
-        <div class="skeleton sk-line sk-full" style="margin-bottom:10px"></div>
-        <div class="skeleton sk-line sk-mid" style="margin-bottom:10px"></div>
-        <div class="skeleton sk-line sk-full" style="margin-bottom:10px"></div>
-        <div class="skeleton sk-line sk-short"></div>
+        <p class="explore-question">${esc(label)}</p>
+        <div class="skeleton sk-ln w-100" style="margin-bottom:10px"></div>
+        <div class="skeleton sk-ln w-85" style="margin-bottom:10px"></div>
+        <div class="skeleton sk-ln w-100" style="margin-bottom:10px"></div>
+        <div class="skeleton sk-ln w-72" style="margin-bottom:10px"></div>
+        <div class="skeleton sk-ln w-100" style="margin-bottom:10px"></div>
+        <div class="skeleton sk-ln w-85"></div>
       `;
 
-      const detourInstructions = {
-        'Simply explained':    'Explain this for a curious, intelligent non-specialist. Use concrete analogies. Avoid jargon.',
-        'Go technical':        'Go deeper into the technical or scientific mechanisms. Assume a well-educated reader who wants precision.',
-        'Economic lens':       'Focus on the economic dimensions — incentives, market structures, costs, trade-offs, and financial consequences.',
-        'Historical roots':    'Ground this in history. How did we arrive here? What are the deep roots and historical precedents?',
-        'Opposing views':      'Present the genuine tensions and disagreements. Where do serious, thoughtful people disagree, and why?',
-        'Second-order effects':'Think through downstream consequences. What might this change over the next 5–20 years? What seems obvious but might be wrong?',
+      const lensGuide = {
+        'Simply explained':    'Explain this for a curious intelligent non-specialist. Use concrete analogies. Avoid jargon.',
+        'Go technical':        'Go deep into the technical or scientific mechanisms. Assume a well-educated reader who wants precision.',
+        'Economic lens':       'Focus on economic dimensions — incentives, market structures, costs, trade-offs, consequences.',
+        'Historical roots':    'Ground this in history. How did we arrive here? What are the deep roots and precedents?',
+        'Opposing views':      'Present genuine tensions and disagreements. Where do serious thoughtful people disagree, and why?',
+        'Second-order effects':'Think through downstream consequences. What might this change over 5–20 years?',
       };
 
-      const lensNote = detour
-        ? `\n\nLens for this response: ${detourInstructions[detour] || detour}`
-        : '';
+      const lensNote = detour ? `\n\nLens: ${lensGuide[detour] || detour}` : '';
 
-      const systemPrompt = `You are a brilliant, measured intellectual guide for The Daily Expedition. You write with the depth and craft of a long-form magazine feature — flowing prose, not bullet points, not listicles.
+      const systemPrompt = `You are a brilliant, measured intellectual guide for The Daily Expedition. You write with the depth and craft of a long-form magazine feature — flowing prose, not bullet points.
 
 Today's event: "${expedition.headline}"
 Context: ${expedition.doorway}
 
-Write 4–6 substantive paragraphs exploring the question. Use subheadings only if you need them for genuine structure (not decoration). Every paragraph should reveal something — connect the specific to the systemic, the present to the past. End your final paragraph with one sentence that opens a new direction of thought, leaving the reader slightly unsettled in a good way.${lensNote}`;
+Write 4–5 substantive paragraphs exploring the question. Use a subheading only if genuinely needed. Every paragraph should reveal something. End with one sentence that opens a new direction, leaving the reader curious.${lensNote}`;
 
-      const userPrompt = `Explore this question with depth and care:\n\n"${q.text}"`;
+      const userPrompt = `Explore this question with depth and care: "${q.text}"`;
 
       try {
-        const answer = await callGemini(systemPrompt, userPrompt);
+        const answer = await callGemini(systemPrompt, userPrompt, false);
         renderExploration(q, answer, idx, detour);
       } catch (err) {
         document.getElementById('js-explore-content').innerHTML = `
-          <p class="explore-question">${escHtml(q.text)}</p>
-          <p class="error-msg">Something went wrong loading this exploration.
-            <span class="error-detail">${escHtml(err.message)}</span>
+          <p class="explore-question">${esc(label)}</p>
+          <p class="error-msg">Could not load this exploration.
+            <span class="error-detail">${esc(err.message)}</span>
           </p>
         `;
       }
     }
 
-    // ─── Render exploration ──────────────────────────────────────────────────
     function renderExploration(q, rawText, idx, detour) {
-      // Convert plain newlines to paragraphs, handle basic markdown headings
       const html = rawText
         .replace(/\r\n/g, '\n')
         .split(/\n{2,}/)
         .map(block => {
-          const trimmed = block.trim();
-          if (!trimmed) return '';
-          if (/^###\s+/.test(trimmed)) {
-            return `<h3>${escHtml(trimmed.replace(/^###\s+/, ''))}</h3>`;
-          }
-          if (/^##\s+/.test(trimmed)) {
-            return `<h3>${escHtml(trimmed.replace(/^##\s+/, ''))}</h3>`;
-          }
-          if (/^#\s+/.test(trimmed)) {
-            return `<h3>${escHtml(trimmed.replace(/^#\s+/, ''))}</h3>`;
-          }
-          // Remove any stray markdown bold/italic markers for cleanliness
-          const clean = trimmed
-            .replace(/\*\*(.*?)\*\*/g, '$1')
-            .replace(/\*(.*?)\*/g, '$1');
-          return `<p>${escHtml(clean)}</p>`;
+          const t = block.trim();
+          if (!t) return '';
+          if (/^#{1,3}\s+/.test(t)) return `<h3>${esc(t.replace(/^#{1,3}\s+/, ''))}</h3>`;
+          return `<p>${esc(t.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1'))}</p>`;
         })
-        .filter(Boolean)
-        .join('\n');
+        .filter(Boolean).join('\n');
 
-      const availableDetours = DETOURS.filter(d => d !== detour);
-      const chips = availableDetours.map(d => `
-        <button class="detour-chip" onclick="openQuestion(${idx}, '${escAttr(d)}')">${escHtml(d)}</button>
-      `).join('');
+      const chips = DETOURS
+        .filter(d => d !== detour)
+        .map(d => `<button class="detour-chip" onclick="openQuestion(${idx},'${escAttr(d)}')">${esc(d)}</button>`)
+        .join('');
 
       document.getElementById('js-explore-content').innerHTML = `
-        <p class="explore-question">${escHtml(detour ? detour + ' — ' + q.text : q.text)}</p>
+        <p class="explore-question">${esc(detour ? detour + ' — ' + q.text : q.text)}</p>
         <div class="explore-body">${html}</div>
         <div class="detour-section">
           <p class="detour-label">Explore through a different lens</p>
@@ -664,28 +565,20 @@ Write 4–6 substantive paragraphs exploring the question. Use subheadings only 
       `;
     }
 
-    // ─── Navigation ──────────────────────────────────────────────────────────
     function showMain() {
       document.getElementById('view-explore').style.display = 'none';
       document.getElementById('view-main').style.display = 'block';
       window.scrollTo({ top: 0, behavior: 'instant' });
     }
 
-    // ─── Utilities ───────────────────────────────────────────────────────────
-    function escHtml(str) {
+    function esc(str) {
       return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
 
-    function escAttr(str) {
-      return String(str).replace(/'/g, "\\'");
-    }
+    function escAttr(str) { return String(str).replace(/'/g, "\\'"); }
 
-    // ─── Init ────────────────────────────────────────────────────────────────
     async function init() {
       try {
         const articles = await fetchNews();
@@ -695,10 +588,9 @@ Write 4–6 substantive paragraphs exploring the question. Use subheadings only 
         renderQuestions(expedition);
       } catch (err) {
         document.getElementById('js-doorway').innerHTML = `
-          <p class="error-msg">
-            The expedition couldn't load today — this is usually a configuration issue.
+          <p class="error-msg">The expedition couldn't load today — this is usually a configuration issue.
             Double-check that both API keys are set in your Netlify environment variables.
-            <span class="error-detail">${escHtml(err.message)}</span>
+            <span class="error-detail">${esc(err.message)}</span>
           </p>
         `;
         document.getElementById('js-questions').innerHTML = '';
