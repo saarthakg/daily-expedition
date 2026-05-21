@@ -4,7 +4,7 @@
 - Your Gemini API key (starts with AIza...)
 - Your Currents API key (from currentsapi.services dashboard)
 - A free Netlify account (netlify.com)
-
+ 
 ---
 
 ## Step 1 — Download and prepare the project
