@@ -19,7 +19,7 @@ exports.handler = async function (event, context) {
     return { statusCode: 400, body: JSON.stringify({ error: "Invalid JSON body." }) };
   }
 
-  const { systemPrompt, userPrompt } = body;
+  const { systemPrompt, userPrompt, expectJson } = body;
 
   if (!systemPrompt || !userPrompt) {
     return {
@@ -31,6 +31,15 @@ exports.handler = async function (event, context) {
   try {
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
+    const generationConfig = {
+      temperature: 0.8,
+      maxOutputTokens: 1200,
+    };
+
+    if (expectJson) {
+      generationConfig.responseMimeType = "application/json";
+    }
+
     const geminiBody = {
       system_instruction: {
         parts: [{ text: systemPrompt }],
@@ -41,10 +50,7 @@ exports.handler = async function (event, context) {
           parts: [{ text: userPrompt }],
         },
       ],
-      generationConfig: {
-        temperature: 0.8,
-        maxOutputTokens: 1200,
-      },
+      generationConfig,
     };
 
     const response = await fetch(geminiUrl, {
@@ -62,8 +68,7 @@ exports.handler = async function (event, context) {
     }
 
     const data = await response.json();
-    const text =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
     return {
       statusCode: 200,

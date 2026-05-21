@@ -481,11 +481,11 @@
       return data.news || [];
     }
 
-    async function callGemini(systemPrompt, userPrompt) {
+    async function callGemini(systemPrompt, userPrompt, expectJson = false) {
       const res = await fetch('/.netlify/functions/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemPrompt, userPrompt }),
+        body: JSON.stringify({ systemPrompt, userPrompt, expectJson }),
       });
       if (!res.ok) throw new Error('Gemini call failed: ' + res.status);
       const data = await res.json();
@@ -527,7 +527,7 @@ Respond ONLY with valid JSON — no markdown, no backticks, no explanation befor
 
       const userPrompt = `Here are today's headlines. Choose the best doorway and generate the expedition:\n\n${digest}`;
 
-      const raw = await callGemini(systemPrompt, userPrompt);
+      const raw = await callGemini(systemPrompt, userPrompt, true);
 
       // Strip any accidental markdown fences
       const cleaned = raw.replace(/```json|```/gi, '').trim();
