@@ -580,10 +580,26 @@ Write 4–5 substantive paragraphs exploring the question. Use a subheading only
     function escAttr(str) { return String(str).replace(/'/g, "\\'"); }
 
     async function init() {
+      const todayKey = 'expedition-' + new Date().toISOString().slice(0, 10);
+
+      // Try loading from cache first
+      try {
+        const cached = localStorage.getItem(todayKey);
+        if (cached) {
+          expedition = JSON.parse(cached);
+          renderDoorway(expedition);
+          renderQuestions(expedition);
+          return;
+        }
+      } catch (_) {}
+
+      // Nothing cached — fetch fresh
       try {
         const articles = await fetchNews();
         if (!articles.length) throw new Error('No articles returned from news API.');
         expedition = await buildExpedition(articles);
+        // Save to cache
+        try { localStorage.setItem(todayKey, JSON.stringify(expedition)); } catch (_) {}
         renderDoorway(expedition);
         renderQuestions(expedition);
       } catch (err) {
