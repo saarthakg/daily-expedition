@@ -68,7 +68,24 @@ exports.handler = async function (event, context) {
     }
 
     const data = await response.json();
-    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    const candidate = data?.candidates?.[0];
+    const text = candidate?.content?.parts?.[0]?.text || "";
+
+    if (!text) {
+      const reason = candidate?.finishReason || data?.promptFeedback?.blockReason || "unknown reason";
+      return {
+        statusCode: 502,
+        body: JSON.stringify({ error: `Gemini returned no text (${reason}).` }),
+      };
+    }
+
+    if (candidate?.finishReason === "MAX_TOKENS") {
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, truncated: true }),
+      };
+    }
 
     return {
       statusCode: 200,

@@ -9,7 +9,7 @@ exports.handler = async function (event, context) {
   }
 
   try {
-    const url = `https://api.currentsapi.services/v1/latest-news?language=en&page_size=20&apiKey=${CURRENTS_API_KEY}`;
+    const url = `https://api.currentsapi.services/v1/latest-news?language=en&page_size=50&apiKey=${CURRENTS_API_KEY}`;
     const response = await fetch(url);
 
     if (!response.ok) {

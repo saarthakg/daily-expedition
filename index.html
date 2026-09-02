@@ -6,7 +6,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Expedition" />
+  <meta name="theme-color" content="#8b1a1a" />
+  <meta name="description" content="A daily briefing that turns one real news story into a calm, magazine-style intellectual expedition." />
   <title>The Daily Expedition</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,400;1,500&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,500;1,8..60,300;1,8..60,400&display=swap" rel="stylesheet" />
@@ -83,6 +88,141 @@
       font-size: 12px;
       color: var(--ink-light);
       font-style: italic;
+    }
+
+    .tab-nav {
+      display: flex;
+      gap: 1.5rem;
+      padding-top: 0.85rem;
+    }
+
+    .tab-link {
+      font-family: var(--font-body);
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ink-light);
+      background: none;
+      border: none;
+      padding: 0 0 4px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .tab-link:hover { color: var(--ink); }
+    .tab-link.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .archive-banner {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 1rem;
+      font-size: 12px;
+      color: var(--ink-light);
+      font-style: italic;
+      background: var(--paper-warm);
+      border-left: 3px solid var(--accent);
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .archive-banner button {
+      font-family: var(--font-body);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: none;
+      border: none;
+      font-style: normal;
+      cursor: pointer;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .regenerate-row {
+      padding: 1.25rem 0 0.5rem;
+      text-align: center;
+    }
+
+    .text-link-btn {
+      font-family: var(--font-body);
+      font-size: 13px;
+      font-style: italic;
+      color: var(--ink-light);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.5rem;
+      -webkit-tap-highlight-color: transparent;
+      transition: color 0.15s;
+    }
+
+    .text-link-btn:hover { color: var(--accent); }
+
+    .retry-btn {
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--ink-mid);
+      border: 1px solid var(--rule);
+      background: none;
+      padding: 6px 14px;
+      border-radius: 2px;
+      cursor: pointer;
+      margin-top: 0.75rem;
+      -webkit-tap-highlight-color: transparent;
+      transition: all 0.15s;
+    }
+
+    .retry-btn:hover { border-color: var(--ink-mid); color: var(--ink); }
+
+    .archive-empty {
+      font-size: 14px;
+      color: var(--ink-light);
+      font-style: italic;
+      padding: 1rem 0;
+    }
+
+    .archive-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1rem 0;
+      border-bottom: 1px solid var(--rule);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 0.15s;
+    }
+
+    .archive-row:first-child { border-top: 1px solid var(--rule); }
+    .archive-row:active { opacity: 0.6; }
+
+    .archive-date-col {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--ink-light);
+      min-width: 80px;
+      padding-top: 3px;
+      flex-shrink: 0;
+    }
+
+    .archive-row-body { flex: 1; }
+
+    .archive-row-headline {
+      font-family: var(--font-display);
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--ink);
+      line-height: 1.4;
+    }
+
+    .archive-row-domain {
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 3px;
     }
 
     #view-main, #view-explore {
@@ -340,9 +480,15 @@
         <span class="masthead-title">The Daily Expedition</span>
         <span class="masthead-date" id="js-date"></span>
       </div>
+      <nav class="tab-nav">
+        <button class="tab-link active" id="js-tab-today" onclick="showToday()">Today</button>
+        <button class="tab-link" id="js-tab-archive" onclick="showArchiveList()">Archive</button>
+      </nav>
     </header>
 
     <main id="view-main">
+      <div id="js-archive-banner" class="archive-banner" style="display:none"></div>
+
       <section id="js-doorway" style="padding-top:2rem">
         <div class="skeleton sk-hl"></div>
         <div class="skeleton sk-hl2"></div>
@@ -354,7 +500,7 @@
 
       <hr class="section-rule" style="margin-top:2rem" />
 
-      <section style="padding-bottom:3rem">
+      <section style="padding-bottom:1rem">
         <p class="eyebrow">Threads worth pulling</p>
         <ul class="questions-list" id="js-questions">
           <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q"></div></li>
@@ -365,16 +511,30 @@
           <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q w-72"></div></li>
         </ul>
       </section>
+
+      <section id="js-regenerate" style="padding-bottom:2rem"></section>
     </main>
 
-    <div id="view-explore" style="padding-top:2rem;padding-bottom:max(3rem,calc(env(safe-area-inset-bottom)+2rem))">
-      <button class="back-btn" onclick="showMain()">← Today's expedition</button>
+    <div id="view-archive" style="display:none;padding-top:2rem;padding-bottom:max(3rem,calc(env(safe-area-inset-bottom)+2rem))">
+      <p class="eyebrow">Past expeditions</p>
+      <div id="js-archive-list"></div>
+    </div>
+
+    <div id="view-explore" style="display:none;padding-top:2rem;padding-bottom:max(3rem,calc(env(safe-area-inset-bottom)+2rem))">
+      <button class="back-btn" onclick="backFromExplore()">← Back</button>
       <div id="js-explore-content"></div>
     </div>
   </div>
 
   <script>
-    let expedition = null;
+    // ---- State ----
+    let expedition = null;        // the expedition currently shown in view-main
+    let todayExpedition = null;   // today's live expedition, independent of what's on screen
+    let viewingArchiveDate = null; // null = today's live expedition; else a 'YYYY-MM-DD' archive key
+    let explorePrevScreen = 'today'; // where the back button from view-explore should return to
+
+    const ARCHIVE_KEY = 'expedition-archive';
+    const ARCHIVE_LIMIT = 14;
 
     const DETOURS = [
       'Simply explained',
@@ -385,6 +545,10 @@
       'Second-order effects',
     ];
 
+    function todayKeyDate() {
+      return new Date().toISOString().slice(0, 10);
+    }
+
     // Date
     (function() {
       const d = new Date();
@@ -393,8 +557,21 @@
     })();
 
     // API calls
+    async function fetchWithTimeout(url, options, ms) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ms || 28000);
+      try {
+        return await fetch(url, { ...(options || {}), signal: controller.signal });
+      } catch (err) {
+        if (err.name === 'AbortError') throw new Error('Request timed out. Please try again.');
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
     async function fetchNews() {
-      const res = await fetch('/.netlify/functions/news');
+      const res = await fetchWithTimeout('/.netlify/functions/news');
       if (!res.ok) throw new Error('News fetch failed: ' + res.status);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -402,7 +579,7 @@
     }
 
     async function callGemini(systemPrompt, userPrompt, expectJson) {
-      const res = await fetch('/.netlify/functions/generate', {
+      const res = await fetchWithTimeout('/.netlify/functions/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ systemPrompt, userPrompt, expectJson: !!expectJson }),
@@ -410,6 +587,9 @@
       if (!res.ok) throw new Error('Gemini call failed: ' + res.status);
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+      if (data.truncated && expectJson) {
+        throw new Error('Gemini response was cut off before completing. Please try again.');
+      }
       return data.text || '';
     }
 
@@ -426,9 +606,28 @@
       throw new Error('Could not parse JSON from Gemini response.');
     }
 
+    // Validate the shape of a parsed expedition before trusting it in the UI
+    function validateExpedition(data) {
+      if (!data || typeof data !== 'object') throw new Error('Response was not a JSON object.');
+      for (const key of ['headline', 'domain_tag', 'doorway']) {
+        if (!data[key] || typeof data[key] !== 'string') {
+          throw new Error(`Response is missing "${key}".`);
+        }
+      }
+      if (!Array.isArray(data.questions) || data.questions.length !== 6) {
+        throw new Error('Response did not include exactly 6 questions.');
+      }
+      for (const q of data.questions) {
+        if (!q || typeof q.tag !== 'string' || !q.tag.trim() || typeof q.text !== 'string' || !q.text.trim()) {
+          throw new Error('One or more questions is missing a tag or text.');
+        }
+      }
+      return data;
+    }
+
     // Build expedition from headlines
-    async function buildExpedition(articles) {
-      const digest = articles.slice(0, 20)
+    async function buildExpedition(articles, excludeHeadline) {
+      const digest = articles.slice(0, 30)
         .map((a, i) => `${i+1}. [${(a.category||[]).join(', ')}] ${a.title}`)
         .join('\n');
 
@@ -456,15 +655,66 @@ Schema:
   ]
 }`;
 
-      const userPrompt = `Here are today's headlines. Choose the best doorway and generate the expedition JSON:\n\n${digest}`;
+      const excludeNote = excludeHeadline
+        ? `\n\nNote: an earlier pick for today was "${excludeHeadline}". Choose a different, genuinely distinct story this time.`
+        : '';
+      const userPrompt = `Here are today's headlines. Choose the best doorway and generate the expedition JSON:\n\n${digest}${excludeNote}`;
       const raw = await callGemini(systemPrompt, userPrompt, true);
-      return parseJson(raw);
+      return validateExpedition(parseJson(raw));
     }
 
-    // Render
-    function renderDoorway(data) {
+    // ---- Archive (rolling local history of past daily doorways) ----
+    function getArchive() {
+      try {
+        const raw = localStorage.getItem(ARCHIVE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        return {};
+      }
+    }
+
+    function saveToArchive(dateKey, data) {
+      const archive = getArchive();
+      archive[dateKey] = {
+        headline: data.headline,
+        domain_tag: data.domain_tag,
+        doorway: data.doorway,
+        questions: data.questions,
+        savedAt: Date.now(),
+      };
+      const keys = Object.keys(archive).sort().reverse();
+      for (const key of keys.slice(ARCHIVE_LIMIT)) delete archive[key];
+      try { localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archive)); } catch (_) {}
+    }
+
+    // ---- Skeletons ----
+    function doorwaySkeletonHtml() {
+      return `
+        <div class="skeleton sk-hl"></div>
+        <div class="skeleton sk-hl2"></div>
+        <div class="skeleton sk-ln w-100"></div>
+        <div class="skeleton sk-ln w-85"></div>
+        <div class="skeleton sk-ln w-100"></div>
+        <div class="skeleton sk-ln w-72"></div>
+      `;
+    }
+
+    function questionsSkeletonHtml() {
+      const widths = ['', 'w-85', 'w-72', 'w-85', '', 'w-72'];
+      return widths.map(w => `
+        <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q ${w}"></div></li>
+      `).join('');
+    }
+
+    // ---- Render: doorway / questions ----
+    function formatArchiveDate(dateKey) {
+      const d = new Date(dateKey + 'T00:00:00');
+      return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    }
+
+    function renderDoorway(data, archived) {
       document.getElementById('js-doorway').innerHTML = `
-        <p class="eyebrow">Today's doorway</p>
+        <p class="eyebrow">${archived ? 'From the archive' : "Today's doorway"}</p>
         <span class="domain-pill">${esc(data.domain_tag)}</span>
         <h1 class="doorway-headline">${esc(data.headline)}</h1>
         <div class="doorway-body"><p>${esc(data.doorway)}</p></div>
@@ -482,12 +732,140 @@ Schema:
       `).join('');
     }
 
+    function renderArchiveBanner() {
+      const banner = document.getElementById('js-archive-banner');
+      if (!viewingArchiveDate) {
+        banner.style.display = 'none';
+        banner.innerHTML = '';
+        return;
+      }
+      banner.style.display = 'flex';
+      banner.innerHTML = `
+        <span>Viewing ${esc(formatArchiveDate(viewingArchiveDate))}</span>
+        <button onclick="showToday()">Today →</button>
+      `;
+    }
+
+    function renderRegenerateControl() {
+      const el = document.getElementById('js-regenerate');
+      el.innerHTML = viewingArchiveDate ? '' : `
+        <div class="regenerate-row">
+          <button class="text-link-btn" onclick="regenerate()">Not feeling this story? Try a different one →</button>
+        </div>
+      `;
+    }
+
+    function renderDoorwayError(err) {
+      document.getElementById('js-doorway').innerHTML = `
+        <p class="error-msg">The expedition couldn't load today — this is usually a configuration issue.
+          Double-check that both API keys are set in your Netlify environment variables.
+          <span class="error-detail">${esc(err.message)}</span>
+        </p>
+        <button class="retry-btn" onclick="loadToday()">Try again</button>
+      `;
+      document.getElementById('js-questions').innerHTML = '';
+      document.getElementById('js-regenerate').innerHTML = '';
+    }
+
+    // ---- View state machine ----
+    function setActiveTab(tab) {
+      document.getElementById('js-tab-today').classList.toggle('active', tab === 'today');
+      document.getElementById('js-tab-archive').classList.toggle('active', tab === 'archive');
+    }
+
+    function showScreen(name) {
+      document.getElementById('view-main').style.display = name === 'main' ? 'block' : 'none';
+      document.getElementById('view-archive').style.display = name === 'archive-list' ? 'block' : 'none';
+      document.getElementById('view-explore').style.display = name === 'explore' ? 'block' : 'none';
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    }
+
+    function showToday() {
+      viewingArchiveDate = null;
+      expedition = todayExpedition;
+      setActiveTab('today');
+      showScreen('main');
+      if (expedition) {
+        renderArchiveBanner();
+        renderDoorway(expedition, false);
+        renderQuestions(expedition);
+        renderRegenerateControl();
+      }
+    }
+
+    function showArchiveList() {
+      setActiveTab('archive');
+      showScreen('archive-list');
+      const archive = getArchive();
+      const keys = Object.keys(archive).sort().reverse();
+      const listEl = document.getElementById('js-archive-list');
+      if (!keys.length) {
+        listEl.innerHTML = '<p class="archive-empty">Nothing here yet — expeditions you complete will collect here for easy revisiting.</p>';
+        return;
+      }
+      listEl.innerHTML = keys.map(key => {
+        const item = archive[key];
+        return `
+          <div class="archive-row" onclick="showArchiveDetail('${key}')" role="button" tabindex="0"
+               onkeydown="if(event.key==='Enter')showArchiveDetail('${key}')">
+            <span class="archive-date-col">${esc(formatArchiveDate(key))}</span>
+            <div class="archive-row-body">
+              <div class="archive-row-headline">${esc(item.headline)}</div>
+              <div class="archive-row-domain">${esc(item.domain_tag)}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function showArchiveDetail(dateKey) {
+      const archive = getArchive();
+      const item = archive[dateKey];
+      if (!item) { showArchiveList(); return; }
+      viewingArchiveDate = dateKey;
+      expedition = item;
+      setActiveTab('archive');
+      showScreen('main');
+      renderArchiveBanner();
+      renderDoorway(item, true);
+      renderQuestions(item);
+      renderRegenerateControl();
+    }
+
+    // ---- Loading today's expedition ----
+    async function fetchAndBuildToday(excludeHeadline) {
+      document.getElementById('js-doorway').innerHTML = doorwaySkeletonHtml();
+      document.getElementById('js-questions').innerHTML = questionsSkeletonHtml();
+      document.getElementById('js-regenerate').innerHTML = '';
+      try {
+        const articles = await fetchNews();
+        if (!articles.length) throw new Error('No articles returned from news API.');
+        todayExpedition = await buildExpedition(articles, excludeHeadline);
+        const key = 'expedition-' + todayKeyDate();
+        try { localStorage.setItem(key, JSON.stringify(todayExpedition)); } catch (_) {}
+        saveToArchive(todayKeyDate(), todayExpedition);
+        showToday();
+      } catch (err) {
+        renderDoorwayError(err);
+      }
+    }
+
+    async function loadToday() {
+      await fetchAndBuildToday();
+    }
+
+    async function regenerate() {
+      if (viewingArchiveDate) return;
+      const ok = confirm("Load a different story for today? This uses one more news + Gemini call and replaces today's expedition.");
+      if (!ok) return;
+      await fetchAndBuildToday(todayExpedition ? todayExpedition.headline : null);
+    }
+
     async function openQuestion(idx, detour) {
       const q = expedition.questions[idx];
+      explorePrevScreen = viewingArchiveDate ? 'archive-detail' : 'today';
 
-      document.getElementById('view-main').style.display = 'none';
-      document.getElementById('view-explore').style.display = 'block';
-      window.scrollTo({ top: 0, behavior: 'instant' });
+      showScreen('explore');
 
       const label = detour ? `${detour} — ${q.text}` : q.text;
 
@@ -525,11 +903,13 @@ Write 4–5 substantive paragraphs exploring the question. Use a subheading only
         const answer = await callGemini(systemPrompt, userPrompt, false);
         renderExploration(q, answer, idx, detour);
       } catch (err) {
+        const retryArgs = idx + (detour ? `,'${escAttr(detour)}'` : '');
         document.getElementById('js-explore-content').innerHTML = `
           <p class="explore-question">${esc(label)}</p>
           <p class="error-msg">Could not load this exploration.
             <span class="error-detail">${esc(err.message)}</span>
           </p>
+          <button class="retry-btn" onclick="openQuestion(${retryArgs})">Try again</button>
         `;
       }
     }
@@ -565,10 +945,12 @@ Write 4–5 substantive paragraphs exploring the question. Use a subheading only
       `;
     }
 
-    function showMain() {
-      document.getElementById('view-explore').style.display = 'none';
-      document.getElementById('view-main').style.display = 'block';
-      window.scrollTo({ top: 0, behavior: 'instant' });
+    function backFromExplore() {
+      if (explorePrevScreen === 'archive-detail' && viewingArchiveDate) {
+        showArchiveDetail(viewingArchiveDate);
+      } else {
+        showToday();
+      }
     }
 
     function esc(str) {
@@ -580,37 +962,29 @@ Write 4–5 substantive paragraphs exploring the question. Use a subheading only
     function escAttr(str) { return String(str).replace(/'/g, "\\'"); }
 
     async function init() {
-      const todayKey = 'expedition-' + new Date().toISOString().slice(0, 10);
+      const todayKey = 'expedition-' + todayKeyDate();
 
-      // Try loading from cache first
+      // Clean up stale daily-cache entries — never touch the archive key
+      const dateKeyPattern = /^expedition-\d{4}-\d{2}-\d{2}$/;
+      for (const key of Object.keys(localStorage)) {
+        if (dateKeyPattern.test(key) && key !== todayKey) {
+          localStorage.removeItem(key);
+        }
+      }
+
+      // Try loading today's cache first
       try {
         const cached = localStorage.getItem(todayKey);
         if (cached) {
-          expedition = JSON.parse(cached);
-          renderDoorway(expedition);
-          renderQuestions(expedition);
+          todayExpedition = validateExpedition(JSON.parse(cached));
+          saveToArchive(todayKeyDate(), todayExpedition);
+          showToday();
           return;
         }
       } catch (_) {}
 
-      // Nothing cached — fetch fresh
-      try {
-        const articles = await fetchNews();
-        if (!articles.length) throw new Error('No articles returned from news API.');
-        expedition = await buildExpedition(articles);
-        // Save to cache
-        try { localStorage.setItem(todayKey, JSON.stringify(expedition)); } catch (_) {}
-        renderDoorway(expedition);
-        renderQuestions(expedition);
-      } catch (err) {
-        document.getElementById('js-doorway').innerHTML = `
-          <p class="error-msg">The expedition couldn't load today — this is usually a configuration issue.
-            Double-check that both API keys are set in your Netlify environment variables.
-            <span class="error-detail">${esc(err.message)}</span>
-          </p>
-        `;
-        document.getElementById('js-questions').innerHTML = '';
-      }
+      // Nothing cached (or cache was invalid) — fetch fresh
+      await loadToday();
     }
 
     init();
