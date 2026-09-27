@@ -2,7 +2,7 @@
 // POST /api/expedition {date}            → replace today's story with a different one
 
 import { buildExpedition, publicView, isCurrentSomewhere, DATE_RE, HttpError } from "../lib/expedition.mjs";
-import { getDay, putDay, saveFirstBuild } from "../lib/store.mjs";
+import { openStore, getDay, putDay, saveFirstBuild } from "../lib/store.mjs";
 
 const MAX_REGENERATIONS = 5;
 const CANDIDATE_REUSE_MS = 3 * 60 * 60 * 1000; // regenerate re-reads the news if the pool is older than this
@@ -20,20 +20,20 @@ function json(status, body) {
   });
 }
 
-async function getExpedition(dateKey) {
-  const existing = await getDay(dateKey);
+async function getExpedition(store, dateKey) {
+  const existing = await getDay(store, dateKey);
   if (existing) return existing;
   if (!isCurrentSomewhere(dateKey)) throw new HttpError(404, "No expedition was saved for that day.");
 
   const record = await buildExpedition(dateKey);
-  return saveFirstBuild(dateKey, { ...record, trigger: "on-demand", regenerations: 0, excluded: [], history: [] });
+  return saveFirstBuild(store, dateKey, { ...record, trigger: "on-demand", regenerations: 0, excluded: [], history: [] });
 }
 
-async function regenerate(dateKey) {
+async function regenerate(store, dateKey) {
   if (!isCurrentSomewhere(dateKey)) throw new HttpError(400, "Only today's expedition can be regenerated.");
 
-  const current = await getDay(dateKey);
-  if (!current) return getExpedition(dateKey);
+  const current = await getDay(store, dateKey);
+  if (!current) return getExpedition(store, dateKey);
   if ((current.regenerations || 0) >= MAX_REGENERATIONS) {
     throw new HttpError(429, `Today's story has already been swapped ${MAX_REGENERATIONS} times — enough news for one day.`);
   }
@@ -53,22 +53,23 @@ async function regenerate(dateKey) {
     excluded,
     history: [...(history || []), previous],
   };
-  await putDay(dateKey, next);
+  await putDay(store, dateKey, next);
   return next;
 }
 
-export default async (req) => {
+export default async (req, context) => {
   try {
+    const store = openStore(context?.deploy?.context);
     if (req.method === "GET") {
       const dateKey = new URL(req.url).searchParams.get("date") || "";
       if (!DATE_RE.test(dateKey)) return json(400, { error: "Missing or invalid date." });
-      return json(200, publicView(await getExpedition(dateKey)));
+      return json(200, publicView(await getExpedition(store, dateKey)));
     }
 
     let body;
     try { body = await req.json(); } catch { return json(400, { error: "Invalid JSON body." }); }
     if (!DATE_RE.test(body?.date || "")) return json(400, { error: "Missing or invalid date." });
-    return json(200, publicView(await regenerate(body.date)));
+    return json(200, publicView(await regenerate(store, body.date)));
   } catch (err) {
     if (!err.status || err.status >= 500) console.error("expedition:", err);
     return json(err.status || 500, { error: err.message });

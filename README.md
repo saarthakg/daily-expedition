@@ -94,7 +94,7 @@ After the site is linked to GitHub, every push to `main` triggers a new deploy a
 
 Keep the folder layout as-is—`index.html`, `netlify.toml`, `package.json`, and `netlify/` must stay in place for routing to work.
 
-The scheduled build only runs on the published (production) deploy, not on branch deploys or deploy previews. To run it on demand, open **Logs → Functions → daily-build → Run now** in Netlify.
+Deploy previews and branch deploys keep their own separate Blobs store, so trying things out on a preview (including regenerating) never changes the live site's story. The scheduled build only runs on the published (production) deploy, not on branch deploys or deploy previews. To run it on demand, open **Logs → Functions → daily-build → Run now** in Netlify.
 
 ### 3. Use on your phone
 

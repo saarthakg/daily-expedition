@@ -2,7 +2,7 @@
 // The question and its context come from the stored expedition, never from the request.
 
 import { explore, LENS_GUIDE, DATE_RE, HttpError } from "../lib/expedition.mjs";
-import { getDay } from "../lib/store.mjs";
+import { openStore, getDay } from "../lib/store.mjs";
 
 // Archive entries saved in the browser before server-side storage existed have no
 // stored record. Until this date they may send their own text (length-capped);
@@ -41,7 +41,7 @@ function legacyVersion(body) {
   return { version: { headline, doorway }, question };
 }
 
-export default async (req) => {
+export default async (req, context) => {
   let body;
   try { body = await req.json(); } catch { return json(400, { error: "Invalid JSON body." }); }
 
@@ -52,7 +52,7 @@ export default async (req) => {
     let version = null;
     let question = null;
 
-    const record = DATE_RE.test(body.date || "") ? await getDay(body.date) : null;
+    const record = DATE_RE.test(body.date || "") ? await getDay(openStore(context?.deploy?.context), body.date) : null;
     const stored = record ? findVersion(record, body.headline) : null;
     const legacy = !stored && Date.now() < LEGACY_FALLBACK_UNTIL ? legacyVersion(body) : null;
 
