@@ -1,7 +1,10 @@
-// POST /api/explore {date, headline, questionIndex, lens} → a long-form exploration.
+// POST /api/explore {date, headline, questionIndex, lens} → a streamed, grounded exploration.
 // The question and its context come from the stored expedition, never from the request.
+// Response: newline-delimited JSON — {type:"text", text} deltas, then one
+// {type:"done", citations, marks, searchSuggestions, grounded, truncated}, or {type:"error"}.
 
-import { explore, LENS_GUIDE, DATE_RE, HttpError } from "../lib/expedition.mjs";
+import { LENS_GUIDE, DATE_RE, HttpError } from "../lib/expedition.mjs";
+import { openExploration } from "../lib/explore.mjs";
 import { openStore, getDay } from "../lib/store.mjs";
 
 // Archive entries saved in the browser before server-side storage existed have no
@@ -69,8 +72,23 @@ export default async (req, context) => {
       throw new HttpError(404, "No expedition was saved for that day.");
     }
 
-    const { text, truncated } = await explore(version, question, lens);
-    return json(200, { text, truncated });
+    const events = await openExploration(version, question, lens);
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (event) => controller.enqueue(encoder.encode(JSON.stringify(event) + "\n"));
+        try {
+          for await (const event of events) send(event);
+        } catch (err) {
+          console.error("explore stream:", err);
+          send({ type: "error", error: err.message });
+        }
+        controller.close();
+      },
+    });
+    return new Response(stream, {
+      headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" },
+    });
   } catch (err) {
     if (!err.status || err.status >= 500) console.error("explore:", err);
     return json(err.status || 500, { error: err.message });
