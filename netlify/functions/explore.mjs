@@ -67,9 +67,18 @@ export default async (req, context) => {
     const record = DATE_RE.test(body.date || "") ? await getDay(store, body.date) : null;
     const stored = record ? findVersion(record, body.headline) : null;
     const isCustom = body.customQuestion != null;
-    const legacy = !stored && !isCustom && Date.now() < LEGACY_FALLBACK_UNTIL ? legacyVersion(body) : null;
+    const isSince = body.since === true;
+    const legacy = !stored && !isCustom && !isSince && Date.now() < LEGACY_FALLBACK_UNTIL ? legacyVersion(body) : null;
 
-    if (stored && isCustom) {
+    if (stored && isSince) {
+      // "What's happened since" only makes sense once the day is behind us
+      if (body.date >= new Date().toISOString().slice(0, 10)) {
+        throw new HttpError(400, "This story is from today — check back tomorrow for what's happened since.");
+      }
+      version = stored;
+      question = "What has happened since?";
+      asked = { since: true };
+    } else if (stored && isCustom) {
       version = stored;
       question = String(body.customQuestion).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
       if (question.length < 5) throw new HttpError(400, "Ask a slightly longer question.");
