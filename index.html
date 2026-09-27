@@ -549,6 +549,35 @@
       line-height: 1.6;
     }
 
+    .reflection-prompt { display: block; }
+    .reflection-input {
+      display: block;
+      width: 100%;
+      margin-top: 0.9rem;
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      padding: 8px 10px;
+      resize: vertical;
+    }
+    .reflection-input::placeholder { color: var(--ink-light); font-style: italic; }
+    .reflection-input:focus { outline: none; border-color: var(--ink-mid); }
+    .reflection-status { min-height: 1em; margin-top: 0.35rem; font-size: 11px; font-style: italic; color: var(--ink-light); }
+    .reflection-read { margin: 2rem 0 0.5rem; }
+    .reflection-text {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: clamp(15px, 2.5vw, 17px);
+      line-height: 1.6;
+      color: var(--ink);
+      white-space: pre-wrap;
+    }
+    .archive-row-reflected { color: var(--ink-light); font-style: italic; text-transform: none; letter-spacing: 0; }
+
     .skeleton {
       background: var(--paper-warm);
       border-radius: 2px;
@@ -636,6 +665,8 @@
         </ul>
       </section>
 
+      <section id="js-reflection"></section>
+
       <section id="js-ask" style="padding-bottom:1rem"></section>
 
       <section id="js-regenerate" style="padding-bottom:2rem"></section>
@@ -663,6 +694,7 @@
     const ARCHIVE_LIMIT = 14;
     const EXPLORATIONS_KEY = 'expedition-explorations';
     const EXPLORATIONS_LIMIT = 60;
+    const REFLECTIONS_KEY = 'expedition-reflections'; // kept indefinitely — it's the reader's journal
 
     const DETOURS = [
       'Simply explained',
@@ -875,6 +907,65 @@
       }).join('');
     }
 
+    // ---- Reflection journal: one entry per day, only in this browser ----
+    function getReflections() {
+      try {
+        const raw = localStorage.getItem(REFLECTIONS_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        return {};
+      }
+    }
+
+    function saveReflection(dateKey, text) {
+      const all = getReflections();
+      if (text.trim()) all[dateKey] = { text, updatedAt: Date.now() };
+      else delete all[dateKey];
+      try {
+        localStorage.setItem(REFLECTIONS_KEY, JSON.stringify(all));
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    let reflectionTimer = null;
+    function onReflectionInput(el) {
+      const status = document.getElementById('js-reflection-status');
+      clearTimeout(reflectionTimer);
+      if (status) status.textContent = '';
+      reflectionTimer = setTimeout(() => {
+        const ok = saveReflection(el.dataset.date, el.value);
+        if (status) status.textContent = ok ? 'Saved' : 'Couldn’t save — storage is unavailable';
+      }, 500);
+    }
+
+    function reflectionBoxHtml(dateKey) {
+      const existing = getReflections()[dateKey];
+      return `
+        <div class="reflection">
+          <label class="reflection-prompt" for="js-reflection-input">"What do you understand now that you didn't understand this morning?"</label>
+          <p class="reflection-sub">The expedition is most valuable when it changes how you see a system — not just what you know about an event.</p>
+          <textarea id="js-reflection-input" class="reflection-input" rows="3" data-date="${esc(dateKey)}"
+                    placeholder="A line or two for your journal…" oninput="onReflectionInput(this)"
+                    onblur="clearTimeout(reflectionTimer); saveReflection(this.dataset.date, this.value)">${esc(existing ? existing.text : '')}</textarea>
+          <p class="reflection-status" id="js-reflection-status">${existing ? 'Saved' : ''}</p>
+        </div>
+      `;
+    }
+
+    // On the day's page, show the reflection once one has been written
+    function renderReflection() {
+      const el = document.getElementById('js-reflection');
+      const entry = getReflections()[viewingArchiveDate || todayKeyDate()];
+      el.innerHTML = entry ? `
+        <div class="reflection reflection-read">
+          <p class="eyebrow">Your reflection</p>
+          <p class="reflection-text">${esc(entry.text)}</p>
+        </div>
+      ` : '';
+    }
+
     function askFormHtml(id, label, parent) {
       const parentArg = Number.isInteger(parent) ? parent : 'null';
       return `
@@ -984,6 +1075,7 @@
         renderDoorway(expedition, false);
         renderQuestions(expedition);
         renderAsk(expedition);
+        renderReflection();
         renderRegenerateControl();
       }
     }
@@ -1006,7 +1098,7 @@
             <span class="archive-date-col">${esc(formatArchiveDate(key))}</span>
             <div class="archive-row-body">
               <div class="archive-row-headline">${esc(item.headline)}</div>
-              <div class="archive-row-domain">${esc(item.domain_tag)}</div>
+              <div class="archive-row-domain">${esc(item.domain_tag)}${getReflections()[key] ? '<span class="archive-row-reflected"> · your reflection</span>' : ''}</div>
             </div>
           </div>
         `;
@@ -1025,6 +1117,7 @@
       renderDoorway(item, true);
       renderQuestions(item);
       renderAsk(item);
+      renderReflection();
       renderRegenerateControl();
     }
 
@@ -1356,10 +1449,7 @@
           <p class="detour-label">Explore through a different lens</p>
           <div class="detour-chips">${chips}</div>
         </div>
-        <div class="reflection">
-          <p class="reflection-prompt">"What do you understand now that you didn't understand this morning?"</p>
-          <p class="reflection-sub">The expedition is most valuable when it changes how you see a system — not just what you know about an event.</p>
-        </div>
+        ${reflectionBoxHtml(viewingArchiveDate || todayKeyDate())}
       `;
 
       // Google requires its Search Suggestions to be shown, unmodified, with grounded
