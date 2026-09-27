@@ -2,7 +2,8 @@
 // 10:00 UTC = 6am Eastern in summer, 5am in winter. Only runs on the published deploy.
 
 import { buildExpedition, localDateKey } from "../lib/expedition.mjs";
-import { openStore, getDay, saveFirstBuild } from "../lib/store.mjs";
+import { openStore, getDay, saveFirstBuild, getRecentDays } from "../lib/store.mjs";
+import { PREFERENCES } from "../lib/preferences.mjs";
 
 export const config = { schedule: "0 10 * * *" };
 
@@ -15,7 +16,8 @@ export default async () => {
     return;
   }
 
-  const record = await buildExpedition(dateKey);
+  const recent = await getRecentDays(store, dateKey, PREFERENCES.varietyDays);
+  const record = await buildExpedition(dateKey, { recent });
   await saveFirstBuild(store, dateKey, { ...record, trigger: "schedule", regenerations: 0, excluded: [], history: [] });
   console.log(`daily-build: ${dateKey} → "${record.headline}"`, record.candidates.report);
 };

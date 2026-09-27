@@ -26,6 +26,14 @@ export async function putDay(store, dateKey, record, { onlyIfNew = false } = {})
   return modified;
 }
 
+// The stored days before dateKey, newest first (missing days are skipped)
+export async function getRecentDays(store, dateKey, days) {
+  const base = Date.parse(`${dateKey}T12:00:00Z`);
+  const keys = Array.from({ length: days }, (_, i) => new Date(base - (i + 1) * 86400000).toISOString().slice(0, 10));
+  const records = await Promise.all(keys.map((k) => getDay(store, k).catch(() => null)));
+  return records.filter(Boolean);
+}
+
 // A simple daily counter (e.g. readers' own questions across the site). Not
 // atomic — two simultaneous bumps may count once — which is fine for a soft cap.
 export async function bumpDailyCount(store, name, now = new Date()) {
