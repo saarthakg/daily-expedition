@@ -283,6 +283,43 @@
     }
     .doorway-sources a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
+    .conversation {
+      margin-top: 1.5rem;
+      padding: 0.9rem 1rem 0.6rem;
+      background: var(--paper-warm);
+      border-left: 3px solid var(--rule);
+    }
+    .conversation-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 1rem;
+    }
+    .conversation-head .eyebrow { margin-bottom: 0.4rem; }
+    .conversation-asof { font-size: 11px; font-style: italic; color: var(--ink-light); }
+    .conversation-row {
+      display: flex;
+      gap: 0.9rem;
+      padding: 0.35rem 0;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .conversation-label {
+      flex: 0 0 5.5rem;
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-light);
+      padding-top: 3px;
+    }
+    .conversation-value { flex: 1; min-width: 0; color: var(--ink-mid); overflow-wrap: anywhere; }
+    .conversation-value a {
+      color: var(--ink);
+      text-decoration: none;
+      border-bottom: 1px solid var(--rule);
+    }
+    .conversation-value a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
     .section-rule {
       border: none;
       border-top: 1px solid var(--rule);
@@ -604,6 +641,7 @@
       'Historical roots',
       'Opposing views',
       'Second-order effects',
+      'Public debate',
     ];
 
     // Local calendar date (YYYY-MM-DD) — toISOString() would roll over at UTC midnight
@@ -698,6 +736,7 @@
         questions: data.questions,
         sources: data.sources || [],
         signals: data.signals || null,
+        builtAt: data.builtAt || null,
         savedAt: Date.now(),
       };
       const keys = Object.keys(archive).sort().reverse();
@@ -737,6 +776,50 @@
         <h1 class="doorway-headline">${esc(data.headline)}</h1>
         <div class="doorway-body"><p>${esc(data.doorway)}</p></div>
         ${sourcesHtml(data.sources)}
+        ${conversationHtml(data)}
+      `;
+    }
+
+    // Signals captured when the story was picked: where it's trending, being
+    // discussed, or bet on. Links out rather than reproducing people's posts.
+    function conversationHtml(data) {
+      const sig = data.signals || {};
+      const link = (url, text) => /^https?:\/\//.test(url || '')
+        ? `<a href="${esc(url)}" target="_blank" rel="noopener">${text}</a>` : text;
+      const rows = [];
+      for (const t of (sig.bluesky || []).slice(0, 1)) {
+        rows.push(['Bluesky', link(t.url, `Trending: “${esc(t.label)}”`) + ` · ${Number(t.postCount).toLocaleString('en-US')} posts`]);
+      }
+      if (sig.hackerNews) {
+        const h = sig.hackerNews;
+        rows.push(['Hacker News', link(h.url, `${Number(h.points).toLocaleString('en-US')} points · ${Number(h.comments).toLocaleString('en-US')} comments`)]);
+      }
+      for (const m of (sig.polymarket || []).slice(0, 2)) {
+        if (!m.lead) continue;
+        const pct = Math.round(m.lead.probability * 100);
+        rows.push(['Markets', link(m.url, esc(m.lead.question)) + ` · ${esc(m.lead.outcome)} ${pct < 1 ? '<1' : pct}%`]);
+      }
+      const wiki = (data.sources || []).find(s => s.source === 'Wikipedia');
+      if (sig.wikipedia) rows.push(['Wikipedia', link(wiki && wiki.url, 'Featured in “In the news”')]);
+      if (!rows.length) return '';
+
+      const when = data.builtAt ? new Date(data.builtAt) : null;
+      const asOf = !when ? '' : (when.toDateString() === new Date().toDateString()
+        ? 'as of ' + when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        : 'as of ' + when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+
+      return `
+        <div class="conversation">
+          <div class="conversation-head">
+            <span class="eyebrow">The conversation</span>
+            ${asOf ? `<span class="conversation-asof">${esc(asOf)}</span>` : ''}
+          </div>
+          ${rows.map(([label, html]) => `
+            <div class="conversation-row">
+              <span class="conversation-label">${esc(label)}</span>
+              <span class="conversation-value">${html}</span>
+            </div>`).join('')}
+        </div>
       `;
     }
 
