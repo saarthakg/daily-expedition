@@ -42,7 +42,7 @@ export function isCurrentSomewhere(dateKey, now = new Date()) {
   );
 }
 
-function describeDate(dateKey) {
+export function describeDate(dateKey) {
   return new Date(dateKey + "T12:00:00Z").toLocaleDateString("en-US", {
     weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: "UTC",
   });
