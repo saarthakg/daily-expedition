@@ -3,6 +3,7 @@
 
 import { gatherSources } from "./sources.mjs";
 import { clusterStories, describeCluster } from "./cluster.mjs";
+import { gatherConversation } from "./conversation.mjs";
 
 export const GEMINI_MODEL = "gemini-2.5-flash";
 const CANDIDATE_LIMIT = 25;
@@ -181,6 +182,7 @@ Your task:
 2. Write a compelling doorway into that story. Stay faithful to what the summaries actually report; do not invent specifics.
 3. Generate six genuinely interesting questions it opens.
 4. List any prediction markets that bear directly on the chosen story (usually none or one; never a market that merely shares a name).
+5. Give a short search query (3–6 words, no quotes or operators) that would find social media posts about this specific story.
 
 You MUST respond with only a valid JSON object. No explanation, no markdown, no code fences. Raw JSON only.
 
@@ -198,7 +200,8 @@ Schema:
     { "tag": "Scientific",   "text": "A question about the underlying technology or science" },
     { "tag": "Wildcard",     "text": "An unexpected adjacent question that becomes fascinating because of this event" }
   ],
-  "market_ids": ["M1"]
+  "market_ids": ["M1"],
+  "search_query": "Iran Hormuz deal Trump"
 }`;
 
   const excludeNote = excluded.length
@@ -227,6 +230,13 @@ export async function buildExpedition(dateKey, { excluded = [], candidates = nul
     .slice(0, 3)
     .map((m) => ({ title: m.title, lead: m.lead, url: m.url }));
 
+  const signals = {
+    ...(story ? story.signals : { outlets: [], wikipedia: false, hackerNews: null, bluesky: [] }),
+    polymarket: markets,
+  };
+  const searchQuery = typeof data.search_query === "string" ? data.search_query.replace(/["']/g, "").trim().slice(0, 100) : "";
+  const conversation = await gatherConversation(signals, searchQuery);
+
   return {
     date: dateKey,
     headline: data.headline.trim(),
@@ -235,16 +245,15 @@ export async function buildExpedition(dateKey, { excluded = [], candidates = nul
     questions: data.questions.map((q) => ({ tag: q.tag.trim(), text: q.text.trim() })),
     sources: story ? story.sources : [],
     reporting: story ? story.reporting : [],
-    signals: {
-      ...(story ? story.signals : { outlets: [], wikipedia: false, hackerNews: null, bluesky: [] }),
-      polymarket: markets,
-    },
+    signals,
+    conversation,
     candidates: pool,
     builtAt: new Date().toISOString(),
   };
 }
 
-// What the browser gets — no candidate pool, source report, or prior versions.
+// What the browser gets — no candidate pool, source report, prior versions, or
+// captured posts (those feed the Public debate lens; the page links out instead).
 export function publicView(record) {
   return {
     date: record.date,
@@ -254,6 +263,13 @@ export function publicView(record) {
     questions: record.questions,
     sources: record.sources || [],
     signals: record.signals || null,
+    conversation: record.conversation
+      ? {
+          capturedAt: record.conversation.capturedAt,
+          blueskyPosts: record.conversation.bluesky.length,
+          hackerNewsComments: record.conversation.hackerNews.length,
+        }
+      : null,
     builtAt: record.builtAt,
   };
 }
