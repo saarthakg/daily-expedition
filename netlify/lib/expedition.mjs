@@ -17,6 +17,7 @@ export const LENS_GUIDE = {
   "Historical roots":     "Ground this in history. How did we arrive here? What are the deep roots and precedents?",
   "Opposing views":       "Present genuine tensions and disagreements. Where do serious thoughtful people disagree, and why?",
   "Second-order effects": "Think through downstream consequences. What might this change over 5–20 years?",
+  "Public debate":        "Map the public argument about this. Identify the main camps, what each emphasises and fears, where they talk past each other, which of their claims are checkable and what the evidence says. Then name the perspectives missing from the sample and search for them — across the political spectrum and outside the US. Describe positions; don't quote or name individual posters.",
 };
 
 const DOMAIN_TAGS = ["Geopolitics", "Economics", "Technology", "Science", "Energy", "Infrastructure", "Culture", "History"];
