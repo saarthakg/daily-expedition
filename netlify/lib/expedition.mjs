@@ -1,10 +1,10 @@
-// Builds a day's expedition from gathered sources, and explores its questions.
-// All prompts live here — the browser only ever names a date, a question, and a lens.
+// Builds a day's expedition from gathered sources. Prompts live server-side —
+// the browser only ever names a date, a question, and a lens.
 
 import { gatherSources } from "./sources.mjs";
 import { clusterStories, describeCluster } from "./cluster.mjs";
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+export const GEMINI_MODEL = "gemini-2.5-flash";
 const CANDIDATE_LIMIT = 25;
 const EXTRA_HN_CANDIDATES = 5;
 const MARKET_LIMIT = 15;
@@ -149,7 +149,7 @@ function formatAttention(signals) {
   return parts.join(" · ");
 }
 
-function formatMarket(m) {
+export function formatMarket(m) {
   if (!m.lead) return m.title;
   const pct = Math.round(m.lead.probability * 100);
   return `${m.lead.question} — market says ${m.lead.outcome} ${pct < 1 ? "<1" : pct}%`;
@@ -256,31 +256,4 @@ export function publicView(record) {
     signals: record.signals || null,
     builtAt: record.builtAt,
   };
-}
-
-// ---- Explore ----
-
-export async function explore(version, question, lens) {
-  const lensNote = lens ? `\n\nLens: ${LENS_GUIDE[lens]}` : "";
-
-  const reporting = (version.reporting || [])
-    .map((r) => `- ${r.source}: ${r.title}${r.summary ? ` — ${r.summary}` : ""}`)
-    .join("\n");
-  const reportingNote = reporting
-    ? `\n\nWhat outlets are reporting (treat this as the factual baseline for today's specifics; draw on your broader knowledge for history and context, but don't invent new details about today's events):\n${reporting}`
-    : "";
-
-  const markets = (version.signals?.polymarket || []).map((m) => `- ${formatMarket(m)}`).join("\n");
-  const marketNote = markets ? `\n\nPrediction markets on this story right now:\n${markets}` : "";
-
-  const systemPrompt = `You are a brilliant, measured intellectual guide for The Daily Expedition. You write with the depth and craft of a long-form magazine feature — flowing prose, not bullet points.
-
-Today's event: "${version.headline}"
-Context: ${version.doorway}${reportingNote}${marketNote}
-
-Write 4–5 substantive paragraphs exploring the question. Use a subheading only if genuinely needed. Every paragraph should reveal something. End with one sentence that opens a new direction, leaving the reader curious.${lensNote}`;
-
-  const userPrompt = `Explore this question with depth and care: "${question}"`;
-
-  return callGemini(systemPrompt, userPrompt, { json: false });
 }
