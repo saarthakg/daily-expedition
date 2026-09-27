@@ -8,8 +8,12 @@
 
 import { GEMINI_MODEL, LENS_GUIDE, HttpError, formatMarket, describeDate, DATE_RE } from "./expedition.mjs";
 
-function explorePrompts(version, question, lens, dateKey) {
-  const lensNote = lens ? `\n\nLens: ${LENS_GUIDE[lens]}` : "";
+function explorePrompts(version, question, lens, dateKey, asked) {
+  // A lens has to shape the whole piece. Tacked on after the writing brief, the
+  // model answered the base question and gave the lens a paragraph or two.
+  const lensNote = lens
+    ? `\n\nThe reader chose the "${lens}" lens. Write the whole piece through it — it should decide what each paragraph is about, not just colour one of them: ${LENS_GUIDE[lens]} Background belongs only where the lens needs it.`
+    : "";
 
   const reporting = (version.reporting || [])
     .map((r) => `- ${r.source}: ${r.title}${r.summary ? ` — ${r.summary}` : ""}`)
@@ -25,6 +29,16 @@ function explorePrompts(version, question, lens, dateKey) {
     ? `\nThis story was chosen on ${describeDate(storyDate)}; today is ${describeDate(new Date().toISOString().slice(0, 10))}.`
     : "";
 
+  // A reader's own question: answer it about this story, and don't become a
+  // general-purpose assistant for anything else.
+  const daysLater = Math.round((Date.now() - Date.parse(`${storyDate}T12:00:00Z`)) / 86400000);
+  const sinceNote = asked?.since
+    ? `\n\nThe reader is revisiting this story ${daysLater <= 1 ? "a day" : `${daysLater} days`} later. Using Google Search, report what has happened since ${describeDate(storyDate)}: the key developments in order, with dates; how the uncertainties in the doorway above resolved or didn't; where any prediction markets listed above have gone, if you can find out; and what to watch next. Be concrete. If little has happened, say so in a paragraph rather than padding. Write 2–4 paragraphs, and don't retell the original story beyond a sentence of reminder.`
+    : "";
+  const askedNote = asked && !asked.since
+    ? `\n\nThe reader asked this question themselves${asked.parent ? `, after reading an exploration of "${asked.parent}"` : ""}. Answer it in the context of this story, matching length to the question (2–5 paragraphs). If it isn't about this story, its background, or its consequences, say so in one sentence and suggest a related question about the story instead of answering it.`
+    : "";
+
   const conversationNote = lens === "Public debate" ? describeConversation(version.conversation) : "";
 
   const markets = (version.signals?.polymarket || []).map((m) => `- ${formatMarket(m)}`).join("\n");
@@ -37,9 +51,15 @@ Context: ${version.doorway}${reportingNote}${marketNote}${conversationNote}
 
 Use Google Search to check current facts, figures, and developments before relying on them — especially anything about the event itself, which may have moved on. Search for coverage from the story's date onward; don't mistake an older event with a similar name for this one. Draw on your broader knowledge for history and context. Never invent specifics.
 
-Write 4–5 substantive paragraphs exploring the question. Use a subheading only if genuinely needed. Every paragraph should reveal something. End with one sentence that opens a new direction, leaving the reader curious.${lensNote}`;
+${asked?.since ? sinceNote.trim() : `Write 4–5 substantive paragraphs exploring the question. Use a subheading only if genuinely needed. Every paragraph should reveal something. End with one sentence that opens a new direction, leaving the reader curious.${lensNote}${askedNote}`}`;
 
-  const userPrompt = `Explore this question with depth and care: "${question}"`;
+  const userPrompt = asked?.since
+    ? `What has happened with this story since ${describeDate(storyDate)}?`
+    : asked
+    ? `The reader's question${lens ? ` (through the "${lens}" lens)` : ""}: "${question}"`
+    : lens
+      ? `Explore this question through the "${lens}" lens, with depth and care: "${question}"`
+      : `Explore this question with depth and care: "${question}"`;
 
   return { systemPrompt, userPrompt };
 }
@@ -156,8 +176,8 @@ export function buildCitations(text, metadata) {
 // (bad key, quota) still reach the browser as a normal HTTP error. If grounding
 // itself is refused — e.g. its daily quota is used up — falls back to an
 // ungrounded answer rather than failing.
-export async function openExploration(version, question, lens, dateKey) {
-  const { systemPrompt, userPrompt } = explorePrompts(version, question, lens, dateKey);
+export async function openExploration(version, question, lens, dateKey, asked = null) {
+  const { systemPrompt, userPrompt } = explorePrompts(version, question, lens, dateKey, asked);
 
   let grounded = true;
   let upstream;

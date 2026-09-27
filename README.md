@@ -14,7 +14,11 @@ Single-page web app, no build step, deploys to Netlify in minutes, and works wel
 - **Six exploration threads** — Tagged questions (Historical, Systemic, Geopolitical, Economic, Scientific, Wildcard) tied to that day's story.
 - **Deep dives, checked against the live web** — Long-form explorations in flowing prose, written as you watch. Gemini uses Google Search to check current facts, and each claim it grounds gets a superscript citation linking to the source, with Google's Search Suggestions shown underneath.
 - **Reading history** — Finished explorations are saved in your browser, so reopening one is instant; **Ask again** gets a fresh take. Questions you've read show a ✓.
-- **Seven analytical lenses** — Reframe any answer: Simply explained, Go technical, Economic lens, Historical roots, Opposing views, Second-order effects, Public debate.
+- **Seven analytical lenses** — Reframe any answer: Simply explained, Go technical, Economic lens, Historical roots, Opposing views, Second-order effects, Public debate. A lens shapes the whole piece, not just a paragraph.
+- **Ask your own question** — Beneath the six threads, and as a follow-up after any exploration. Answered in the context of the day's story (off-topic questions get a redirect), grounded and cited like the rest. Your questions are listed under the day's threads.
+- **Reflection journal** — "What do you understand now that you didn't this morning?" has a box that saves as you type — one entry per day, kept in your browser. It shows on that day's page and is marked in the archive.
+- **Listen** — Read-aloud for the doorway and every exploration, using your browser's built-in voices (no API).
+- **What's happened since** — On any past day in the archive, a grounded update on how the story developed after it was picked.
 - **Built once a day, on the server** — A scheduled function builds the expedition at 6am Eastern and stores it in Netlify Blobs, so opening the app is instant and every device sees the same story. If you're up before the build, the first open of the day builds it.
 - **Daily local cache** — The doorway and six questions are also kept in `localStorage`, so the app renders immediately and then quietly checks the server for a newer version (e.g. a story you swapped on another device).
 - **Archive** — Every day's doorway and questions are also kept in a rolling 14-day local history, browsable from the Archive tab. Old threads stay explorable (each tap still calls Gemini fresh).
@@ -144,6 +148,7 @@ To also clear the archive (e.g. to test the empty-archive state) or your reading
 ```javascript
 localStorage.removeItem('expedition-archive');
 localStorage.removeItem('expedition-explorations');
+localStorage.removeItem('expedition-reflections'); // your journal — only if you mean it
 ```
 
 ## Project structure
@@ -189,8 +194,10 @@ Never commit API keys. If a key is exposed, rotate it in the provider dashboard 
 - Open once a day; the expedition is usually already waiting, built at 6am Eastern.
 - Reopening the same day is instant—the cache is used until midnight (local date), and any change made on another device is picked up in the background.
 - Tap a question to explore it; use the lens chips at the bottom to reframe the same thread. Tap a superscript number to jump to its source. Reopening something you've read is instant; **Ask again** writes it fresh.
+- Ask your own question under the six threads, or a follow-up after any exploration. Tap **Listen** to have any piece read aloud.
+- Write a line in the reflection box at the end — it's your journal for the day.
 - Not feeling today's pick? Tap **Not feeling this story? Try a different one** below the questions to regenerate today's doorway (for all your devices).
-- Use the **Archive** tab to revisit any of the last 14 days' doorways and re-explore their questions.
+- Use the **Archive** tab to revisit any of the last 14 days' doorways, re-explore their questions, and see **What's happened since**.
 - A full session is about 15–20 minutes.
 
 ## API usage and caching
@@ -200,6 +207,7 @@ Never commit API keys. If a key is exposed, rotate it in the provider dashboard 
 | 6am scheduled build | ~16 free source fetches (+1 Currents if configured) + 1× Gemini (doorway JSON) |
 | Opening the app | 1 Blobs read (no Gemini) — or the build above, if you're up before 6am |
 | Each question or lens explored (today or archive) | 1× Gemini with Google Search grounding (none if it's in your reading history) |
+| Your own question, or "What's happened since" | 1× Gemini with Google Search grounding. Own questions are capped at 50 a day across the site. |
 | "Try a different one" (regenerate) | 1× Gemini; sources are re-fetched only if the shortlist is over 3 hours old |
 
 Typical daily use: one doorway generation, plus a handful of exploration calls as you read — no matter how many devices you open it on.

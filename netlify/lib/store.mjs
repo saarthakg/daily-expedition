@@ -26,6 +26,16 @@ export async function putDay(store, dateKey, record, { onlyIfNew = false } = {})
   return modified;
 }
 
+// A simple daily counter (e.g. readers' own questions across the site). Not
+// atomic — two simultaneous bumps may count once — which is fine for a soft cap.
+export async function bumpDailyCount(store, name, now = new Date()) {
+  const key = `counters/${name}/${now.toISOString().slice(0, 10)}`;
+  const current = (await store.get(key, { type: "json" })) || { count: 0 };
+  const next = { count: current.count + 1 };
+  await store.setJSON(key, next);
+  return next.count;
+}
+
 // Build a day if nobody has yet; if two builds race, both callers get the first one saved.
 export async function saveFirstBuild(store, dateKey, record) {
   if (await putDay(store, dateKey, record, { onlyIfNew: true })) return record;

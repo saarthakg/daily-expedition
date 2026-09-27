@@ -283,6 +283,20 @@
     }
     .doorway-sources a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
+    .since-link {
+      display: inline-block;
+      margin-top: 1.25rem;
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-style: italic;
+      color: var(--accent);
+      background: none;
+      border: none;
+      border-bottom: 1px solid currentColor;
+      padding: 0 0 1px;
+      cursor: pointer;
+    }
+
     .conversation {
       margin-top: 1.5rem;
       padding: 0.9rem 1rem 0.6rem;
@@ -430,6 +444,34 @@
 
     .text-link-btn.inline { font-size: inherit; font-style: inherit; padding: 0; color: var(--accent); }
 
+    .ask-form { margin-top: 2rem; }
+    .ask-form .detour-label { display: block; }
+    .ask-row { display: flex; gap: 8px; align-items: stretch; }
+    .ask-input {
+      flex: 1;
+      min-width: 0;
+      font-family: var(--font-body);
+      font-size: 16px; /* 16px stops iOS zooming on focus */
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      padding: 8px 10px;
+    }
+    .ask-input::placeholder { color: var(--ink-light); font-style: italic; }
+    .ask-input:focus { outline: none; border-color: var(--ink-mid); }
+    .ask-btn {
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--ink-mid);
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      padding: 0 16px;
+      cursor: pointer;
+    }
+    .ask-btn:hover { border-color: var(--ink-mid); color: var(--ink); }
+
     .explore-note {
       margin-top: 1.25rem;
       font-size: 12px;
@@ -521,6 +563,49 @@
       line-height: 1.6;
     }
 
+    .listen-row { display: flex; gap: 10px; margin: -0.75rem 0 1.25rem; }
+    .doorway-body + .listen-row { margin: 0.9rem 0 0; }
+    .listen-btn, .listen-stop {
+      font-family: var(--font-body);
+      font-size: 12px;
+      color: var(--ink-light);
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      padding: 3px 12px;
+      cursor: pointer;
+    }
+    .listen-btn:hover, .listen-stop:hover { color: var(--ink); border-color: var(--ink-mid); }
+
+    .reflection-prompt { display: block; }
+    .reflection-input {
+      display: block;
+      width: 100%;
+      margin-top: 0.9rem;
+      font-family: var(--font-body);
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      padding: 8px 10px;
+      resize: vertical;
+    }
+    .reflection-input::placeholder { color: var(--ink-light); font-style: italic; }
+    .reflection-input:focus { outline: none; border-color: var(--ink-mid); }
+    .reflection-status { min-height: 1em; margin-top: 0.35rem; font-size: 11px; font-style: italic; color: var(--ink-light); }
+    .reflection-read { margin: 2rem 0 0.5rem; }
+    .reflection-text {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: clamp(15px, 2.5vw, 17px);
+      line-height: 1.6;
+      color: var(--ink);
+      white-space: pre-wrap;
+    }
+    .archive-row-reflected { color: var(--ink-light); font-style: italic; text-transform: none; letter-spacing: 0; }
+
     .skeleton {
       background: var(--paper-warm);
       border-radius: 2px;
@@ -608,6 +693,10 @@
         </ul>
       </section>
 
+      <section id="js-reflection"></section>
+
+      <section id="js-ask" style="padding-bottom:1rem"></section>
+
       <section id="js-regenerate" style="padding-bottom:2rem"></section>
     </main>
 
@@ -633,6 +722,7 @@
     const ARCHIVE_LIMIT = 14;
     const EXPLORATIONS_KEY = 'expedition-explorations';
     const EXPLORATIONS_LIMIT = 60;
+    const REFLECTIONS_KEY = 'expedition-reflections'; // kept indefinitely — it's the reader's journal
 
     const DETOURS = [
       'Simply explained',
@@ -775,8 +865,11 @@
         <span class="domain-pill">${esc(data.domain_tag)}</span>
         <h1 class="doorway-headline">${esc(data.headline)}</h1>
         <div class="doorway-body"><p>${esc(data.doorway)}</p></div>
+        ${listenControlsHtml(`${data.headline}. ${data.doorway}`)}
         ${sourcesHtml(data.sources)}
         ${conversationHtml(data)}
+        ${archived && viewingArchiveDate < todayKeyDate() ? `
+          <button class="since-link" onclick="openSince()">What's happened since? →</button>` : ''}
       `;
     }
 
@@ -845,6 +938,223 @@
       }).join('');
     }
 
+    // ---- Listen mode: the browser's own speech synthesis, no API ----
+    // Chrome silently stops long utterances after ~15s, so text is queued a
+    // sentence or two at a time.
+    const canListen = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+    const listenTexts = [];   // text for each rendered Listen control, by index
+    let listening = null;     // { index, paused }
+
+    function listenControlsHtml(text) {
+      if (!canListen) return '';
+      const i = listenTexts.push(text) - 1;
+      return `
+        <div class="listen-row" data-listen="${i}">
+          <button class="listen-btn" onclick="toggleListen(${i})">▶ Listen</button>
+          <button class="listen-stop" onclick="stopListening()" hidden>Stop</button>
+        </div>
+      `;
+    }
+
+    function speakableChunks(text) {
+      const plain = text
+        .replace(/^#{1,3}\s+/gm, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
+      const chunks = [];
+      for (const para of plain.split(/\n{2,}/)) {
+        let current = '';
+        for (const sentence of para.match(/[^.!?]+[.!?]+["'”’)]*\s*|[^.!?]+$/g) || []) {
+          if ((current + sentence).length > 220 && current) { chunks.push(current.trim()); current = ''; }
+          current += sentence;
+          // A run-on sentence still has to fit: break it at word boundaries
+          while (current.length > 240) {
+            const cut = current.lastIndexOf(' ', 220);
+            const at = cut > 80 ? cut : 220;
+            chunks.push(current.slice(0, at).trim());
+            current = current.slice(at);
+          }
+        }
+        if (current.trim()) chunks.push(current.trim());
+      }
+      return chunks;
+    }
+
+    function pickVoice() {
+      const voices = speechSynthesis.getVoices().filter(v => /^en(-|_|$)/i.test(v.lang));
+      return voices.find(v => /natural|premium|enhanced|neural/i.test(v.name))
+        || voices.find(v => /google/i.test(v.name))
+        || voices.find(v => v.default)
+        || voices[0] || null;
+    }
+
+    function updateListenControls() {
+      document.querySelectorAll('.listen-row').forEach(row => {
+        const mine = listening && Number(row.dataset.listen) === listening.index;
+        row.querySelector('.listen-btn').textContent = !mine ? '▶ Listen' : listening.paused ? '▶ Resume' : '❚❚ Pause';
+        row.querySelector('.listen-stop').hidden = !mine;
+      });
+    }
+
+    // Pause is "remember the sentence, then cancel": speechSynthesis.pause() is
+    // ignored by Chrome's Google voices and unreliable on Android.
+    function speakFrom(session) {
+      const gen = ++session.gen;
+      const voice = pickVoice();
+      session.chunks.slice(session.pos).forEach((chunk, k) => {
+        const n = session.pos + k;
+        const u = new SpeechSynthesisUtterance(chunk);
+        if (voice) { u.voice = voice; u.lang = voice.lang; }
+        u.rate = 1;
+        const live = () => listening === session && session.gen === gen;
+        u.onstart = () => { if (live()) session.pos = n; };
+        if (n === session.chunks.length - 1) u.onend = () => { if (live()) { listening = null; updateListenControls(); } };
+        u.onerror = (e) => {
+          if (!live() || e.error === 'interrupted' || e.error === 'canceled') return;
+          console.warn('Listen: speech failed —', e.error);
+          listening = null;
+          updateListenControls();
+        };
+        speechSynthesis.speak(u);
+      });
+    }
+
+    function toggleListen(index) {
+      if (listening && listening.index === index) {
+        listening.paused = !listening.paused;
+        if (listening.paused) {
+          listening.gen++;           // orphan the queued utterances' callbacks
+          speechSynthesis.cancel();
+        } else {
+          speakFrom(listening);
+        }
+        updateListenControls();
+        return;
+      }
+      stopListening();
+      const chunks = speakableChunks(listenTexts[index] || '');
+      if (!chunks.length) return;
+      listening = { index, paused: false, chunks, pos: 0, gen: 0 };
+      speakFrom(listening);
+      updateListenControls();
+    }
+
+    function stopListening() {
+      if (!canListen) return;
+      listening = null;
+      speechSynthesis.cancel();
+      updateListenControls();
+    }
+
+    // ---- Reflection journal: one entry per day, only in this browser ----
+    function getReflections() {
+      try {
+        const raw = localStorage.getItem(REFLECTIONS_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        return {};
+      }
+    }
+
+    function saveReflection(dateKey, text) {
+      const all = getReflections();
+      if (text.trim()) all[dateKey] = { text, updatedAt: Date.now() };
+      else delete all[dateKey];
+      try {
+        localStorage.setItem(REFLECTIONS_KEY, JSON.stringify(all));
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    let reflectionTimer = null;
+    function onReflectionInput(el) {
+      const status = document.getElementById('js-reflection-status');
+      clearTimeout(reflectionTimer);
+      if (status) status.textContent = '';
+      reflectionTimer = setTimeout(() => {
+        const ok = saveReflection(el.dataset.date, el.value);
+        if (status) status.textContent = ok ? 'Saved' : 'Couldn’t save — storage is unavailable';
+      }, 500);
+    }
+
+    function reflectionBoxHtml(dateKey) {
+      const existing = getReflections()[dateKey];
+      return `
+        <div class="reflection">
+          <label class="reflection-prompt" for="js-reflection-input">"What do you understand now that you didn't understand this morning?"</label>
+          <p class="reflection-sub">The expedition is most valuable when it changes how you see a system — not just what you know about an event.</p>
+          <textarea id="js-reflection-input" class="reflection-input" rows="3" data-date="${esc(dateKey)}"
+                    placeholder="A line or two for your journal…" oninput="onReflectionInput(this)"
+                    onblur="clearTimeout(reflectionTimer); saveReflection(this.dataset.date, this.value)">${esc(existing ? existing.text : '')}</textarea>
+          <p class="reflection-status" id="js-reflection-status">${existing ? 'Saved' : ''}</p>
+        </div>
+      `;
+    }
+
+    // On the day's page, show the reflection once one has been written
+    function renderReflection() {
+      const el = document.getElementById('js-reflection');
+      const entry = getReflections()[viewingArchiveDate || todayKeyDate()];
+      el.innerHTML = entry ? `
+        <div class="reflection reflection-read">
+          <p class="eyebrow">Your reflection</p>
+          <p class="reflection-text">${esc(entry.text)}</p>
+        </div>
+      ` : '';
+    }
+
+    function askFormHtml(id, label, parent) {
+      const parentArg = Number.isInteger(parent) ? parent : 'null';
+      return `
+        <form class="ask-form" onsubmit="return submitAsk(event, ${parentArg})">
+          <label class="detour-label" for="${id}">${esc(label)}</label>
+          <div class="ask-row">
+            <input id="${id}" class="ask-input" name="q" maxlength="280" autocomplete="off"
+                   placeholder="What else do you want to know about this story?" />
+            <button class="ask-btn" type="submit">Ask</button>
+          </div>
+        </form>
+      `;
+    }
+
+    function submitAsk(event, parent) {
+      event.preventDefault();
+      const text = event.target.q.value.replace(/\s+/g, ' ').trim();
+      if (text.length >= 5) askOwnQuestion(text, parent);
+      else event.target.q.focus();
+      return false;
+    }
+
+    // Questions the reader asked about this day's story, from their reading history
+    function askedQuestions(dateKey, headline) {
+      const prefix = explorationKey(dateKey, headline, 'ask:', '').slice(0, -1);
+      const seen = new Set();
+      for (const key of Object.keys(getExplorations())) {
+        if (key.startsWith(prefix)) seen.add(key.slice(prefix.length, key.lastIndexOf('|')));
+      }
+      return [...seen];
+    }
+
+    function renderAsk(data) {
+      const el = document.getElementById('js-ask');
+      const asked = askedQuestions(viewingArchiveDate || todayKeyDate(), data.headline);
+      el.innerHTML = `
+        ${asked.length ? `
+          <p class="eyebrow">Your questions</p>
+          <ul class="questions-list">
+            ${asked.map(text => `
+              <li class="question-row read" onclick="openThread(${threadFor({ kind: 'ask', text })})" role="button" tabindex="0"
+                  onkeydown="if(event.key==='Enter')this.click()">
+                <span class="question-tag">Yours</span>
+                <span class="question-text">${esc(text)}</span>
+                <span class="question-arrow" title="Read">✓</span>
+              </li>`).join('')}
+          </ul>` : ''}
+        ${askFormHtml('js-ask-main', 'Ask your own question', null)}
+      `;
+    }
+
     function renderArchiveBanner() {
       const banner = document.getElementById('js-archive-banner');
       if (!viewingArchiveDate) {
@@ -887,6 +1197,7 @@
     }
 
     function showScreen(name) {
+      stopListening();
       document.getElementById('view-main').style.display = name === 'main' ? 'block' : 'none';
       document.getElementById('view-archive').style.display = name === 'archive-list' ? 'block' : 'none';
       document.getElementById('view-explore').style.display = name === 'explore' ? 'block' : 'none';
@@ -902,6 +1213,8 @@
         renderArchiveBanner();
         renderDoorway(expedition, false);
         renderQuestions(expedition);
+        renderAsk(expedition);
+        renderReflection();
         renderRegenerateControl();
       }
     }
@@ -924,7 +1237,7 @@
             <span class="archive-date-col">${esc(formatArchiveDate(key))}</span>
             <div class="archive-row-body">
               <div class="archive-row-headline">${esc(item.headline)}</div>
-              <div class="archive-row-domain">${esc(item.domain_tag)}</div>
+              <div class="archive-row-domain">${esc(item.domain_tag)}${getReflections()[key] ? '<span class="archive-row-reflected"> · your reflection</span>' : ''}</div>
             </div>
           </div>
         `;
@@ -942,6 +1255,8 @@
       renderArchiveBanner();
       renderDoorway(item, true);
       renderQuestions(item);
+      renderAsk(item);
+      renderReflection();
       renderRegenerateControl();
     }
 
@@ -1012,6 +1327,7 @@
         searchSuggestions: result.searchSuggestions || '',
         grounded: result.grounded,
         truncated: result.truncated,
+        question: result.question || '',
         savedAt: Date.now(),
       };
       // Keep what the archive can still reach, newest first, within a size budget
@@ -1090,8 +1406,48 @@
       }
     }
 
-    async function openQuestion(idx, detour, askAgain) {
-      const q = expedition.questions[idx];
+    // A thread is one of the day's six questions or one the reader asked.
+    // Threads are registered once and referred to by number in onclick handlers.
+    const threads = [];
+    function threadFor(spec) {
+      const id = spec.kind === 'q' ? 'q' + spec.idx : spec.kind === 'since' ? 'since' : 'ask:' + spec.text;
+      let n = threads.findIndex(t => t.id === id);
+      if (n === -1) n = threads.push({ ...spec, id }) - 1;
+      return n;
+    }
+
+    function threadQuestion(t) {
+      if (t.kind === 'q') return expedition.questions[t.idx];
+      if (t.kind === 'since') return { tag: 'Since', text: `What's happened since ${formatArchiveDate(viewingArchiveDate)}?` };
+      return { tag: 'Your question', text: t.text };
+    }
+
+    function threadHistorySegment(t) {
+      return t.kind === 'q' ? t.idx : t.kind === 'since' ? 'since' : 'ask:' + t.text;
+    }
+
+    function threadPayload(t) {
+      // doorway + question are only used for archive days saved before the server kept its own copy
+      if (t.kind === 'q') return { questionIndex: t.idx, doorway: expedition.doorway, question: expedition.questions[t.idx].text };
+      if (t.kind === 'since') return { since: true };
+      return { customQuestion: t.text, parentIndex: t.parent };
+    }
+
+    function openSince() {
+      return openThread(threadFor({ kind: 'since' }), null);
+    }
+
+    function openQuestion(idx, detour, askAgain) {
+      return openThread(threadFor({ kind: 'q', idx }), detour, askAgain);
+    }
+
+    function askOwnQuestion(text, parent) {
+      return openThread(threadFor({ kind: 'ask', text, parent: Number.isInteger(parent) ? parent : null }), null);
+    }
+
+    async function openThread(threadId, detour, askAgain) {
+      const thread = threads[threadId];
+      const q = threadQuestion(thread);
       explorePrevScreen = viewingArchiveDate ? 'archive-detail' : 'today';
       detour = detour || null;
 
@@ -1101,12 +1457,12 @@
       const content = document.getElementById('js-explore-content');
       const run = ++exploreRun;
       const dateKey = viewingArchiveDate || todayKeyDate();
-      const historyKey = explorationKey(dateKey, expedition.headline, idx, detour);
+      const historyKey = explorationKey(dateKey, expedition.headline, threadHistorySegment(thread), detour);
 
       const saved = !askAgain && getExplorations()[historyKey];
       if (saved) {
         if (exploreController) exploreController.abort();
-        renderExploration(q, saved, idx, detour, saved.savedAt);
+        renderExploration(q, saved, threadId, detour, saved.savedAt);
         return;
       }
 
@@ -1143,27 +1499,24 @@
         const result = await streamExploration({
           date: dateKey,
           headline: expedition.headline,
-          questionIndex: idx,
           lens: detour || null,
-          // Only used for archive days saved before the server kept its own copy
-          doorway: expedition.doorway,
-          question: q.text,
+          ...threadPayload(thread),
         }, onText);
         if (run !== exploreRun) return;
         exploreRun++;
-        saveExploration(historyKey, result);
-        renderExploration(q, result, idx, detour);
+        saveExploration(historyKey, { ...result, question: q.text });
+        renderExploration(q, result, threadId, detour);
       } catch (err) {
         if (err.cancelled || run !== exploreRun) return;
         exploreRun++;
-        const retryArgs = idx + (detour ? `,'${escAttr(detour)}'` : '');
+        const retryArgs = threadId + (detour ? `,'${escAttr(detour)}'` : '');
         content.innerHTML = `
           <p class="explore-question">${esc(label)}</p>
           ${err.partial ? `<div class="explore-body">${proseHtml(err.partial, [])}</div>` : ''}
           <p class="error-msg">${err.partial ? 'The rest of this exploration didn\'t arrive.' : 'Could not load this exploration.'}
             <span class="error-detail">${esc(err.message)}</span>
           </p>
-          <button class="retry-btn" onclick="openQuestion(${retryArgs})">Try again</button>
+          <button class="retry-btn" onclick="openThread(${retryArgs})">Try again</button>
         `;
       }
     }
@@ -1218,33 +1571,36 @@
       `;
     }
 
-    function renderExploration(q, result, idx, detour, savedAt) {
+    function renderExploration(q, result, threadId, detour, savedAt) {
+      const thread = threads[threadId];
       const chips = DETOURS
         .filter(d => d !== detour)
-        .map(d => `<button class="detour-chip" onclick="openQuestion(${idx},'${escAttr(d)}')">${esc(d)}</button>`)
+        .map(d => `<button class="detour-chip" onclick="openThread(${threadId},'${escAttr(d)}')">${esc(d)}</button>`)
         .join('');
 
       const notes = [];
-      const askAgainArgs = `${idx},${detour ? `'${escAttr(detour)}'` : 'null'},true`;
+      const askAgainArgs = `${threadId},${detour ? `'${escAttr(detour)}'` : 'null'},true`;
+      // Follow-ups hang off one of the six threads, so the server can name it for context
+      const parent = thread.kind === 'q' ? thread.idx : thread.parent;
       if (result.grounded === false) notes.push('Written without a live web search — Google Search grounding was unavailable just now.');
       if (result.truncated) notes.push('This exploration reached its length limit and may end abruptly.');
 
       const content = document.getElementById('js-explore-content');
       content.innerHTML = `
         <p class="explore-question">${esc(detour ? detour + ' — ' + q.text : q.text)}</p>
+        ${listenControlsHtml(`${q.text}\n\n${result.text}`)}
         <div class="explore-body">${proseHtml(result.text, result.marks)}</div>
         ${notes.map(n => `<p class="explore-note">${esc(n)}</p>`).join('')}
         ${savedAt ? `<p class="explore-note">From your reading ${esc(formatSavedAt(savedAt))} ·
-          <button class="text-link-btn inline" onclick="openQuestion(${askAgainArgs})">Ask again</button></p>` : ''}
+          <button class="text-link-btn inline" onclick="openThread(${askAgainArgs})">Ask again</button></p>` : ''}
         ${sourcesListHtml(result)}
+        ${askFormHtml('js-ask-followup', 'Ask a follow-up', parent)}
+        ${thread.kind === 'since' ? '' : `
         <div class="detour-section">
           <p class="detour-label">Explore through a different lens</p>
           <div class="detour-chips">${chips}</div>
-        </div>
-        <div class="reflection">
-          <p class="reflection-prompt">"What do you understand now that you didn't understand this morning?"</p>
-          <p class="reflection-sub">The expedition is most valuable when it changes how you see a system — not just what you know about an event.</p>
-        </div>
+        </div>`}
+        ${reflectionBoxHtml(viewingArchiveDate || todayKeyDate())}
       `;
 
       // Google requires its Search Suggestions to be shown, unmodified, with grounded
