@@ -1,16 +1,23 @@
 // POST /api/explore {date, headline, questionIndex, lens} → a streamed, grounded exploration.
-// The question and its context come from the stored expedition, never from the request.
+// The question and its context come from the stored expedition, never from the request —
+// except a reader's own question ({customQuestion, parentIndex}), which is length-capped,
+// only allowed on a stored day, and limited site-wide per day.
 // Response: newline-delimited JSON — {type:"text", text} deltas, then one
 // {type:"done", citations, marks, searchSuggestions, grounded, truncated}, or {type:"error"}.
 
 import { LENS_GUIDE, DATE_RE, HttpError } from "../lib/expedition.mjs";
 import { openExploration } from "../lib/explore.mjs";
-import { openStore, getDay } from "../lib/store.mjs";
+import { openStore, getDay, bumpDailyCount } from "../lib/store.mjs";
 
 // Archive entries saved in the browser before server-side storage existed have no
 // stored record. Until this date they may send their own text (length-capped);
 // by then every such entry has aged out of the 14-day archive.
 const LEGACY_FALLBACK_UNTIL = Date.parse("2026-10-12T00:00:00Z");
+
+// Readers' own questions are the one free-text input, so they get a hard
+// site-wide daily ceiling on top of the per-IP rate limit.
+const CUSTOM_QUESTION_MAX_CHARS = 280;
+const CUSTOM_QUESTIONS_PER_DAY = 50;
 
 export const config = {
   path: "/api/explore",
@@ -54,12 +61,25 @@ export default async (req, context) => {
   try {
     let version = null;
     let question = null;
+    let asked = null;
 
-    const record = DATE_RE.test(body.date || "") ? await getDay(openStore(context?.deploy?.context), body.date) : null;
+    const store = openStore(context?.deploy?.context);
+    const record = DATE_RE.test(body.date || "") ? await getDay(store, body.date) : null;
     const stored = record ? findVersion(record, body.headline) : null;
-    const legacy = !stored && Date.now() < LEGACY_FALLBACK_UNTIL ? legacyVersion(body) : null;
+    const isCustom = body.customQuestion != null;
+    const legacy = !stored && !isCustom && Date.now() < LEGACY_FALLBACK_UNTIL ? legacyVersion(body) : null;
 
-    if (stored) {
+    if (stored && isCustom) {
+      version = stored;
+      question = String(body.customQuestion).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+      if (question.length < 5) throw new HttpError(400, "Ask a slightly longer question.");
+      if (question.length > CUSTOM_QUESTION_MAX_CHARS) throw new HttpError(400, `Keep your question under ${CUSTOM_QUESTION_MAX_CHARS} characters.`);
+      if (await bumpDailyCount(store, "custom-questions") > CUSTOM_QUESTIONS_PER_DAY) {
+        throw new HttpError(429, "Today's allowance of your own questions is used up — the six threads are still open.");
+      }
+      const parent = Number(body.parentIndex);
+      asked = { parent: Number.isInteger(parent) ? version.questions[parent]?.text || null : null };
+    } else if (stored) {
       version = stored;
       const idx = Number(body.questionIndex);
       question = Number.isInteger(idx) ? version.questions[idx]?.text : null;
@@ -72,7 +92,7 @@ export default async (req, context) => {
       throw new HttpError(404, "No expedition was saved for that day.");
     }
 
-    const events = await openExploration(version, question, lens, body.date);
+    const events = await openExploration(version, question, lens, body.date, asked);
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {

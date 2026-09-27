@@ -8,7 +8,7 @@
 
 import { GEMINI_MODEL, LENS_GUIDE, HttpError, formatMarket, describeDate, DATE_RE } from "./expedition.mjs";
 
-function explorePrompts(version, question, lens, dateKey) {
+function explorePrompts(version, question, lens, dateKey, asked) {
   // A lens has to shape the whole piece. Tacked on after the writing brief, the
   // model answered the base question and gave the lens a paragraph or two.
   const lensNote = lens
@@ -29,6 +29,12 @@ function explorePrompts(version, question, lens, dateKey) {
     ? `\nThis story was chosen on ${describeDate(storyDate)}; today is ${describeDate(new Date().toISOString().slice(0, 10))}.`
     : "";
 
+  // A reader's own question: answer it about this story, and don't become a
+  // general-purpose assistant for anything else.
+  const askedNote = asked
+    ? `\n\nThe reader asked this question themselves${asked.parent ? `, after reading an exploration of "${asked.parent}"` : ""}. Answer it in the context of this story, matching length to the question (2–5 paragraphs). If it isn't about this story, its background, or its consequences, say so in one sentence and suggest a related question about the story instead of answering it.`
+    : "";
+
   const conversationNote = lens === "Public debate" ? describeConversation(version.conversation) : "";
 
   const markets = (version.signals?.polymarket || []).map((m) => `- ${formatMarket(m)}`).join("\n");
@@ -41,11 +47,13 @@ Context: ${version.doorway}${reportingNote}${marketNote}${conversationNote}
 
 Use Google Search to check current facts, figures, and developments before relying on them — especially anything about the event itself, which may have moved on. Search for coverage from the story's date onward; don't mistake an older event with a similar name for this one. Draw on your broader knowledge for history and context. Never invent specifics.
 
-Write 4–5 substantive paragraphs exploring the question. Use a subheading only if genuinely needed. Every paragraph should reveal something. End with one sentence that opens a new direction, leaving the reader curious.${lensNote}`;
+Write 4–5 substantive paragraphs exploring the question. Use a subheading only if genuinely needed. Every paragraph should reveal something. End with one sentence that opens a new direction, leaving the reader curious.${lensNote}${askedNote}`;
 
-  const userPrompt = lens
-    ? `Explore this question through the "${lens}" lens, with depth and care: "${question}"`
-    : `Explore this question with depth and care: "${question}"`;
+  const userPrompt = asked
+    ? `The reader's question${lens ? ` (through the "${lens}" lens)` : ""}: "${question}"`
+    : lens
+      ? `Explore this question through the "${lens}" lens, with depth and care: "${question}"`
+      : `Explore this question with depth and care: "${question}"`;
 
   return { systemPrompt, userPrompt };
 }
@@ -162,8 +170,8 @@ export function buildCitations(text, metadata) {
 // (bad key, quota) still reach the browser as a normal HTTP error. If grounding
 // itself is refused — e.g. its daily quota is used up — falls back to an
 // ungrounded answer rather than failing.
-export async function openExploration(version, question, lens, dateKey) {
-  const { systemPrompt, userPrompt } = explorePrompts(version, question, lens, dateKey);
+export async function openExploration(version, question, lens, dateKey, asked = null) {
+  const { systemPrompt, userPrompt } = explorePrompts(version, question, lens, dateKey, asked);
 
   let grounded = true;
   let upstream;
