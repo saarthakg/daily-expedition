@@ -330,6 +330,8 @@
     }
 
     .question-row:hover .question-arrow { transform: translateX(3px); color: var(--accent); }
+    .question-row.read .question-text { color: var(--ink-mid); }
+    .question-row.read .question-arrow { color: var(--ink-light); }
 
     .back-btn {
       display: inline-flex;
@@ -388,6 +390,8 @@
       color: var(--ink-light);
       animation: pulse 1.8s ease-in-out infinite;
     }
+
+    .text-link-btn.inline { font-size: inherit; font-style: inherit; padding: 0; color: var(--accent); }
 
     .explore-note {
       margin-top: 1.25rem;
@@ -590,6 +594,8 @@
 
     const ARCHIVE_KEY = 'expedition-archive';
     const ARCHIVE_LIMIT = 14;
+    const EXPLORATIONS_KEY = 'expedition-explorations';
+    const EXPLORATIONS_LIMIT = 60;
 
     const DETOURS = [
       'Simply explained',
@@ -742,14 +748,18 @@
     }
 
     function renderQuestions(data) {
-      document.getElementById('js-questions').innerHTML = data.questions.map((q, i) => `
-        <li class="question-row" onclick="openQuestion(${i})" role="button" tabindex="0"
+      const dateKey = viewingArchiveDate || todayKeyDate();
+      document.getElementById('js-questions').innerHTML = data.questions.map((q, i) => {
+        const read = hasReadQuestion(dateKey, data.headline, i);
+        return `
+        <li class="question-row${read ? ' read' : ''}" onclick="openQuestion(${i})" role="button" tabindex="0"
             onkeydown="if(event.key==='Enter')openQuestion(${i})">
           <span class="question-tag">${esc(q.tag)}</span>
           <span class="question-text">${esc(q.text)}</span>
-          <span class="question-arrow">→</span>
+          <span class="question-arrow" ${read ? 'title="Read"' : ''}>${read ? '✓' : '→'}</span>
         </li>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function renderArchiveBanner() {
@@ -894,6 +904,56 @@
       await loadToday(requestNewExpedition);
     }
 
+    // ---- Reading history: finished explorations, kept only in this browser ----
+    // (Google's grounding terms allow keeping answers as the reader's own history,
+    // not caching them for others — so this never goes to the server.)
+    function explorationKey(dateKey, headline, idx, lens) {
+      return [dateKey, headline, idx, lens || ''].join('|');
+    }
+
+    function getExplorations() {
+      try {
+        const raw = localStorage.getItem(EXPLORATIONS_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (_) {
+        return {};
+      }
+    }
+
+    function saveExploration(key, result) {
+      const all = getExplorations();
+      all[key] = {
+        text: result.text,
+        marks: result.marks || [],
+        citations: result.citations || [],
+        searchSuggestions: result.searchSuggestions || '',
+        grounded: result.grounded,
+        truncated: result.truncated,
+        savedAt: Date.now(),
+      };
+      // Keep what the archive can still reach, newest first, within a size budget
+      const oldest = new Date(Date.now() - ARCHIVE_LIMIT * 86400000).toISOString().slice(0, 10);
+      const keys = Object.keys(all)
+        .filter(k => k.slice(0, 10) >= oldest)
+        .sort((a, b) => all[b].savedAt - all[a].savedAt);
+      let kept = keys.slice(0, EXPLORATIONS_LIMIT);
+      for (;;) {
+        try {
+          localStorage.setItem(EXPLORATIONS_KEY, JSON.stringify(Object.fromEntries(kept.map(k => [k, all[k]]))));
+          return;
+        } catch (_) {
+          if (kept.length <= 1) return; // storage unavailable or full — reading still works
+          kept = kept.slice(0, Math.ceil(kept.length / 2));
+        }
+      }
+    }
+
+    // Read if any lens of this question was explored (keys share the "date|headline|idx|" prefix)
+    function hasReadQuestion(dateKey, headline, idx) {
+      const prefix = explorationKey(dateKey, headline, idx, '');
+      return Object.keys(getExplorations()).some(k => k.startsWith(prefix));
+    }
+
     // ---- Explorations (streamed from /api/explore as newline-delimited JSON) ----
     let exploreController = null; // aborts an in-flight stream when the reader moves on
     let exploreRun = 0;           // lets queued redraws from an earlier or finished stream bow out
@@ -947,15 +1007,25 @@
       }
     }
 
-    async function openQuestion(idx, detour) {
+    async function openQuestion(idx, detour, askAgain) {
       const q = expedition.questions[idx];
       explorePrevScreen = viewingArchiveDate ? 'archive-detail' : 'today';
+      detour = detour || null;
 
       showScreen('explore');
 
       const label = detour ? `${detour} — ${q.text}` : q.text;
       const content = document.getElementById('js-explore-content');
       const run = ++exploreRun;
+      const dateKey = viewingArchiveDate || todayKeyDate();
+      const historyKey = explorationKey(dateKey, expedition.headline, idx, detour);
+
+      const saved = !askAgain && getExplorations()[historyKey];
+      if (saved) {
+        if (exploreController) exploreController.abort();
+        renderExploration(q, saved, idx, detour, saved.savedAt);
+        return;
+      }
 
       content.innerHTML = `
         <p class="explore-question">${esc(label)}</p>
@@ -987,7 +1057,7 @@
 
       try {
         const result = await streamExploration({
-          date: viewingArchiveDate || todayKeyDate(),
+          date: dateKey,
           headline: expedition.headline,
           questionIndex: idx,
           lens: detour || null,
@@ -997,6 +1067,7 @@
         }, onText);
         if (run !== exploreRun) return;
         exploreRun++;
+        saveExploration(historyKey, result);
         renderExploration(q, result, idx, detour);
       } catch (err) {
         if (err.cancelled || run !== exploreRun) return;
@@ -1034,6 +1105,14 @@
           `<sup class="cite">${refs.split(',').map(n => `<a href="#" onclick="return jumpToCitation(${Number(n)})">${Number(n)}</a>`).join('')}</sup>`);
     }
 
+    function formatSavedAt(ts) {
+      const d = new Date(ts);
+      const sameDay = d.toDateString() === new Date().toDateString();
+      return sameDay
+        ? 'earlier today, ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+        : 'on ' + d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    }
+
     function jumpToCitation(n) {
       const el = document.getElementById('cite-' + n);
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1055,13 +1134,14 @@
       `;
     }
 
-    function renderExploration(q, result, idx, detour) {
+    function renderExploration(q, result, idx, detour, savedAt) {
       const chips = DETOURS
         .filter(d => d !== detour)
         .map(d => `<button class="detour-chip" onclick="openQuestion(${idx},'${escAttr(d)}')">${esc(d)}</button>`)
         .join('');
 
       const notes = [];
+      const askAgainArgs = `${idx},${detour ? `'${escAttr(detour)}'` : 'null'},true`;
       if (result.grounded === false) notes.push('Written without a live web search — Google Search grounding was unavailable just now.');
       if (result.truncated) notes.push('This exploration reached its length limit and may end abruptly.');
 
@@ -1070,6 +1150,8 @@
         <p class="explore-question">${esc(detour ? detour + ' — ' + q.text : q.text)}</p>
         <div class="explore-body">${proseHtml(result.text, result.marks)}</div>
         ${notes.map(n => `<p class="explore-note">${esc(n)}</p>`).join('')}
+        ${savedAt ? `<p class="explore-note">From your reading ${esc(formatSavedAt(savedAt))} ·
+          <button class="text-link-btn inline" onclick="openQuestion(${askAgainArgs})">Ask again</button></p>` : ''}
         ${sourcesListHtml(result)}
         <div class="detour-section">
           <p class="detour-label">Explore through a different lens</p>
