@@ -6,7 +6,7 @@ Single-page web app, no build step, deploys to Netlify in minutes, and works wel
 
 ## Features
 
-- **Real news, one doorway** — Fetches today's English headlines via [Currents API](https://currentsapi.services), filters out sports and entertainment, and uses Gemini to choose the single most intellectually rich story.
+- **Real news, one doorway** — Fetches today's English headlines via [Currents API](https://currentsapi.services), filters out sports and entertainment, and gives Gemini each headline with its summary so it can choose the single most intellectually rich story without inventing details.
 - **Six exploration threads** — Tagged questions (Historical, Systemic, Geopolitical, Economic, Scientific, Wildcard) tied to that day's story.
 - **Deep dives on demand** — Long-form explorations in flowing prose, generated when you tap a question.
 - **Six analytical lenses** — Reframe any answer: Simply explained, Go technical, Economic lens, Historical roots, Opposing views, Second-order effects.
@@ -16,7 +16,7 @@ Single-page web app, no build step, deploys to Netlify in minutes, and works wel
 - **Resilient by default** — Gemini's JSON is schema-checked before it's trusted, truncated responses are detected, requests time out instead of hanging, and every failure state offers a "Try again" button.
 - **Installable PWA** — A web app manifest and generated icon set make "Add to Home Screen" produce a real app icon on iOS and Android, not a page screenshot.
 - **Mobile-first** — Responsive typography, safe-area insets, dark mode, Add to Home Screen on iOS and Android.
-- **Keys stay server-side** — API keys live only in Netlify environment variables; the browser never sees them.
+- **Keys stay server-side** — API keys live only in Netlify environment variables; the browser never sees them. Prompts also live server-side, so the function only accepts two request types (`expedition`, `explore`) with length-capped inputs and an allow-listed lens, plus a best-effort per-IP rate limit — it can't be used as a general-purpose Gemini proxy.
 
 ## How it works
 
@@ -24,7 +24,7 @@ Single-page web app, no build step, deploys to Netlify in minutes, and works wel
 flowchart TD
   A[Open app] --> B{Today's cache in localStorage?}
   B -->|Yes| C[Render doorway + questions]
-  B -->|No| D[news.js → Currents API]
+  B -->|No| D[generate.js → Currents API]
   D --> E[generate.js → Gemini JSON]
   E --> F{Valid schema?}
   F -->|No| X[Show error + Try again]
@@ -111,14 +111,14 @@ cp .env.example .env
 netlify dev
 ```
 
-Open the URL shown in the terminal (usually `http://localhost:8888`). Functions are available at `/.netlify/functions/news` and `/.netlify/functions/generate`.
+Open the URL shown in the terminal (usually `http://localhost:8888`). The single function is available at `/.netlify/functions/generate`.
 
 Do not commit `.env`.
 
 To test a fresh daily load locally, clear today's cache in the browser console:
 
 ```javascript
-localStorage.removeItem('expedition-' + new Date().toISOString().slice(0, 10));
+localStorage.removeItem('expedition-' + todayKeyDate());
 location.reload();
 ```
 
@@ -136,8 +136,9 @@ localStorage.removeItem('expedition-archive');
 ├── icons/                  # Generated app icons (favicon, apple-touch, 192/512)
 ├── netlify.toml            # Function paths, 30s timeouts, publish dir
 ├── netlify/functions/
-│   ├── news.js             # Currents API proxy
-│   └── generate.js         # Gemini API proxy
+│   └── generate.js         # Builds expeditions + explorations (prompts live here)
+├── netlify/lib/
+│   └── news.js             # Currents API helper, bundled into generate.js
 ├── .env.example            # Local env template
 ├── LICENSE
 └── README.md
@@ -148,7 +149,7 @@ localStorage.removeItem('expedition-archive');
 | Name | Required | Used by |
 |------|----------|---------|
 | `GEMINI_API_KEY` | Yes | `generate.js` |
-| `CURRENTS_API_KEY` | Yes | `news.js` |
+| `CURRENTS_API_KEY` | Yes | `generate.js` (via `netlify/lib/news.js`) |
 
 Never commit API keys. If a key is exposed, rotate it in the provider dashboard and update Netlify (or your local `.env`).
 
@@ -194,7 +195,7 @@ Caching the daily doorway cuts repeat API usage when you check back later the sa
 | **News API error** | Re-copy `CURRENTS_API_KEY` from the Currents dashboard. |
 | **Gemini error / timeout** | Verify the key in [AI Studio](https://aistudio.google.com); check rate limits. Functions allow up to 30s—very long answers may still fail. |
 | **"Response is missing..." / malformed JSON error** | Gemini returned incomplete or off-schema JSON. Click **Try again** — this is a rare model hiccup, not a config problem. |
-| **Stale or wrong day's story** | Clear cache: `localStorage.removeItem('expedition-' + new Date().toISOString().slice(0, 10))` then reload — or just tap **Try a different one**. |
+| **Stale or wrong day's story** | Clear cache: `localStorage.removeItem('expedition-' + todayKeyDate())` then reload — or just tap **Try a different one**. |
 | **Archive is empty** | The archive only fills as you use the app day to day; there is nothing to backfill from before this feature existed. |
 | **Broken layout on phone** | Use Safari (iOS) or Chrome (Android); hard-refresh the page. |
 
