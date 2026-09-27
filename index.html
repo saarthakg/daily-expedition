@@ -381,6 +381,49 @@
       line-height: 1.3;
     }
 
+    .explore-status {
+      margin-top: 1.25rem;
+      font-size: 12px;
+      font-style: italic;
+      color: var(--ink-light);
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+
+    .explore-note {
+      margin-top: 1.25rem;
+      font-size: 12px;
+      font-style: italic;
+      color: var(--ink-light);
+    }
+
+    .cite { font-size: 0.65em; line-height: 0; margin-left: 1px; }
+    .cite a {
+      color: var(--accent);
+      text-decoration: none;
+      padding: 0 1px;
+    }
+    .cite a + a::before { content: ","; color: var(--ink-light); }
+
+    .explore-sources {
+      margin-top: 2.25rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--rule);
+    }
+    .explore-sources ol {
+      padding-left: 1.4rem;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--ink-light);
+    }
+    .explore-sources a {
+      color: var(--ink-mid);
+      text-decoration: none;
+      border-bottom: 1px solid var(--rule);
+      word-break: break-word;
+    }
+    .explore-sources a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+    .search-suggestions { margin-top: 1rem; max-width: 100%; overflow-x: auto; }
+
     .detour-section {
       margin-top: 2.5rem;
       padding-top: 1.25rem;
@@ -851,6 +894,59 @@
       await loadToday(requestNewExpedition);
     }
 
+    // ---- Explorations (streamed from /api/explore as newline-delimited JSON) ----
+    let exploreController = null; // aborts an in-flight stream when the reader moves on
+    let exploreRun = 0;           // lets queued redraws from an earlier or finished stream bow out
+
+    async function streamExploration(payload, onText) {
+      if (exploreController) exploreController.abort();
+      const controller = exploreController = new AbortController();
+      const timer = setTimeout(() => controller.abort('timeout'), 60000);
+      let text = '';
+      const fail = (message) => Object.assign(new Error(message), { partial: text });
+      try {
+        const res = await fetch('/api/explore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        if (!(res.headers.get('content-type') || '').includes('ndjson')) {
+          let data = null;
+          try { data = await res.json(); } catch (_) {}
+          throw fail((data && data.error) || 'Request failed: ' + res.status);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let finished = null;
+        for (;;) {
+          const { value, done } = await reader.read();
+          buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+          const lines = buffer.split('\n');
+          buffer = done ? '' : lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const event = JSON.parse(line);
+            if (event.type === 'text') { text += event.text; onText(text); }
+            else if (event.type === 'done') finished = event;
+            else if (event.type === 'error') throw fail(event.error);
+          }
+          if (done) break;
+        }
+        if (!finished) throw fail('The answer was cut short. Please try again.');
+        return { ...finished, text };
+      } catch (err) {
+        if (controller.signal.aborted) {
+          throw Object.assign(fail(controller.signal.reason === 'timeout' ? 'Request timed out. Please try again.' : 'Cancelled.'), { cancelled: controller.signal.reason !== 'timeout' });
+        }
+        throw err.partial !== undefined ? err : fail(err.message);
+      } finally {
+        clearTimeout(timer);
+        if (exploreController === controller) exploreController = null;
+      }
+    }
+
     async function openQuestion(idx, detour) {
       const q = expedition.questions[idx];
       explorePrevScreen = viewingArchiveDate ? 'archive-detail' : 'today';
@@ -858,8 +954,10 @@
       showScreen('explore');
 
       const label = detour ? `${detour} — ${q.text}` : q.text;
+      const content = document.getElementById('js-explore-content');
+      const run = ++exploreRun;
 
-      document.getElementById('js-explore-content').innerHTML = `
+      content.innerHTML = `
         <p class="explore-question">${esc(label)}</p>
         <div class="skeleton sk-ln w-100" style="margin-bottom:10px"></div>
         <div class="skeleton sk-ln w-85" style="margin-bottom:10px"></div>
@@ -869,26 +967,45 @@
         <div class="skeleton sk-ln w-85"></div>
       `;
 
+      // Redraw at most once per frame while text streams in. Frames can fire late
+      // (browsers hold them while a tab is hidden), so one queued before the stream
+      // finished must not paint over the final render — hence the run check.
+      let pending = null;
+      const onText = (text) => {
+        if (pending) { pending = text; return; }
+        pending = text;
+        requestAnimationFrame(() => {
+          if (run !== exploreRun || pending === null) return;
+          content.innerHTML = `
+            <p class="explore-question">${esc(label)}</p>
+            <div class="explore-body">${proseHtml(pending, [])}</div>
+            <p class="explore-status">Writing…</p>
+          `;
+          pending = null;
+        });
+      };
+
       try {
-        const data = await apiRequest('/api/explore', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            date: viewingArchiveDate || todayKeyDate(),
-            headline: expedition.headline,
-            questionIndex: idx,
-            lens: detour || null,
-            // Only used for archive days saved before the server kept its own copy
-            doorway: expedition.doorway,
-            question: q.text,
-          }),
-        }, 58000);
-        renderExploration(q, data.text || '', idx, detour);
+        const result = await streamExploration({
+          date: viewingArchiveDate || todayKeyDate(),
+          headline: expedition.headline,
+          questionIndex: idx,
+          lens: detour || null,
+          // Only used for archive days saved before the server kept its own copy
+          doorway: expedition.doorway,
+          question: q.text,
+        }, onText);
+        if (run !== exploreRun) return;
+        exploreRun++;
+        renderExploration(q, result, idx, detour);
       } catch (err) {
+        if (err.cancelled || run !== exploreRun) return;
+        exploreRun++;
         const retryArgs = idx + (detour ? `,'${escAttr(detour)}'` : '');
-        document.getElementById('js-explore-content').innerHTML = `
+        content.innerHTML = `
           <p class="explore-question">${esc(label)}</p>
-          <p class="error-msg">Could not load this exploration.
+          ${err.partial ? `<div class="explore-body">${proseHtml(err.partial, [])}</div>` : ''}
+          <p class="error-msg">${err.partial ? 'The rest of this exploration didn\'t arrive.' : 'Could not load this exploration.'}
             <span class="error-detail">${esc(err.message)}</span>
           </p>
           <button class="retry-btn" onclick="openQuestion(${retryArgs})">Try again</button>
@@ -896,8 +1013,14 @@
       }
     }
 
-    function renderExploration(q, rawText, idx, detour) {
-      const html = rawText
+    // Paragraphs and subheadings from Gemini's light markdown, with citation
+    // markers inserted at the character positions the server computed.
+    function proseHtml(rawText, marks) {
+      let text = rawText;
+      for (const m of [...(marks || [])].sort((a, b) => b.at - a.at)) {
+        text = text.slice(0, m.at) + '' + m.refs.join(',') + '' + text.slice(m.at);
+      }
+      return text
         .replace(/\r\n/g, '\n')
         .split(/\n{2,}/)
         .map(block => {
@@ -906,16 +1029,48 @@
           if (/^#{1,3}\s+/.test(t)) return `<h3>${esc(t.replace(/^#{1,3}\s+/, ''))}</h3>`;
           return `<p>${esc(t.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1'))}</p>`;
         })
-        .filter(Boolean).join('\n');
+        .filter(Boolean).join('\n')
+        .replace(/([\d,]+)/g, (_, refs) =>
+          `<sup class="cite">${refs.split(',').map(n => `<a href="#" onclick="return jumpToCitation(${Number(n)})">${Number(n)}</a>`).join('')}</sup>`);
+    }
 
+    function jumpToCitation(n) {
+      const el = document.getElementById('cite-' + n);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return false;
+    }
+
+    function sourcesListHtml(result) {
+      const items = (result.citations || [])
+        .filter(c => /^https?:\/\//.test(c.url || ''))
+        .map(c => `<li id="cite-${Number(c.n)}"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a></li>`)
+        .join('');
+      const hasSuggestions = !!result.searchSuggestions;
+      if (!items && !hasSuggestions) return '';
+      return `
+        <div class="explore-sources">
+          ${items ? `<p class="detour-label">Sources</p><ol>${items}</ol>` : ''}
+          ${hasSuggestions ? '<div class="search-suggestions" id="js-search-suggestions"></div>' : ''}
+        </div>
+      `;
+    }
+
+    function renderExploration(q, result, idx, detour) {
       const chips = DETOURS
         .filter(d => d !== detour)
         .map(d => `<button class="detour-chip" onclick="openQuestion(${idx},'${escAttr(d)}')">${esc(d)}</button>`)
         .join('');
 
-      document.getElementById('js-explore-content').innerHTML = `
+      const notes = [];
+      if (result.grounded === false) notes.push('Written without a live web search — Google Search grounding was unavailable just now.');
+      if (result.truncated) notes.push('This exploration reached its length limit and may end abruptly.');
+
+      const content = document.getElementById('js-explore-content');
+      content.innerHTML = `
         <p class="explore-question">${esc(detour ? detour + ' — ' + q.text : q.text)}</p>
-        <div class="explore-body">${html}</div>
+        <div class="explore-body">${proseHtml(result.text, result.marks)}</div>
+        ${notes.map(n => `<p class="explore-note">${esc(n)}</p>`).join('')}
+        ${sourcesListHtml(result)}
         <div class="detour-section">
           <p class="detour-label">Explore through a different lens</p>
           <div class="detour-chips">${chips}</div>
@@ -925,9 +1080,17 @@
           <p class="reflection-sub">The expedition is most valuable when it changes how you see a system — not just what you know about an event.</p>
         </div>
       `;
+
+      // Google requires its Search Suggestions to be shown, unmodified, with grounded
+      // answers. A shadow root keeps its bundled CSS from clashing with the page's.
+      const host = document.getElementById('js-search-suggestions');
+      if (host && result.searchSuggestions) {
+        host.attachShadow({ mode: 'open' }).innerHTML = result.searchSuggestions;
+      }
     }
 
     function backFromExplore() {
+      if (exploreController) exploreController.abort();
       if (explorePrevScreen === 'archive-detail' && viewingArchiveDate) {
         showArchiveDetail(viewingArchiveDate);
       } else {
