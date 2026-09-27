@@ -1,0 +1,11 @@
+{
+  "name": "daily-expedition",
+  "private": true,
+  "description": "Serverless functions for The Daily Expedition",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.1"
+  }
+}

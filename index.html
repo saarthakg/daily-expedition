@@ -270,6 +270,18 @@
     }
 
     .doorway-body p + p { margin-top: 0.85rem; }
+    .doorway-sources {
+      margin-top: 1rem;
+      font-size: 12px;
+      font-style: italic;
+      color: var(--ink-light);
+    }
+    .doorway-sources a {
+      color: var(--ink-mid);
+      text-decoration: none;
+      border-bottom: 1px solid var(--rule);
+    }
+    .doorway-sources a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
     .section-rule {
       border: none;
@@ -545,8 +557,11 @@
       'Second-order effects',
     ];
 
+    // Local calendar date (YYYY-MM-DD) — toISOString() would roll over at UTC midnight
     function todayKeyDate() {
-      return new Date().toISOString().slice(0, 10);
+      const d = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     }
 
     // Date
@@ -570,43 +585,18 @@
       }
     }
 
-    async function fetchNews() {
-      const res = await fetchWithTimeout('/.netlify/functions/news');
-      if (!res.ok) throw new Error('News fetch failed: ' + res.status);
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      return data.news || [];
+    // Prompts and the day's story live server-side; the client names a date, question, and lens
+    async function apiRequest(url, options, ms) {
+      const res = await fetchWithTimeout(url, options, ms);
+      let data = null;
+      try { data = await res.json(); } catch (_) {}
+      if (data && data.error) throw new Error(data.error);
+      if (!res.ok) throw new Error('Request failed: ' + res.status);
+      if (!data) throw new Error('Unexpected response from server.');
+      return data;
     }
 
-    async function callGemini(systemPrompt, userPrompt, expectJson) {
-      const res = await fetchWithTimeout('/.netlify/functions/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ systemPrompt, userPrompt, expectJson: !!expectJson }),
-      });
-      if (!res.ok) throw new Error('Gemini call failed: ' + res.status);
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      if (data.truncated && expectJson) {
-        throw new Error('Gemini response was cut off before completing. Please try again.');
-      }
-      return data.text || '';
-    }
-
-    // Parse JSON robustly — strips markdown fences if present
-    function parseJson(raw) {
-      // Try direct parse first
-      try { return JSON.parse(raw); } catch (_) {}
-      // Strip markdown fences and retry
-      const stripped = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
-      try { return JSON.parse(stripped); } catch (_) {}
-      // Extract first {...} block and retry
-      const match = stripped.match(/\{[\s\S]*\}/);
-      if (match) return JSON.parse(match[0]);
-      throw new Error('Could not parse JSON from Gemini response.');
-    }
-
-    // Validate the shape of a parsed expedition before trusting it in the UI
+    // Validate the shape of an expedition before trusting it in the UI
     function validateExpedition(data) {
       if (!data || typeof data !== 'object') throw new Error('Response was not a JSON object.');
       for (const key of ['headline', 'domain_tag', 'doorway']) {
@@ -625,42 +615,19 @@
       return data;
     }
 
-    // Build expedition from headlines
-    async function buildExpedition(articles, excludeHeadline) {
-      const digest = articles.slice(0, 30)
-        .map((a, i) => `${i+1}. [${(a.category||[]).join(', ')}] ${a.title}`)
-        .join('\n');
+    // Today's expedition is usually built at 6am; the first request of the day builds it otherwise (up to ~40s)
+    async function fetchExpedition(dateKey) {
+      const data = await apiRequest('/api/expedition?date=' + encodeURIComponent(dateKey), null, 58000);
+      return validateExpedition(data);
+    }
 
-      const systemPrompt = `You are the editor of The Daily Expedition — a calm, intellectually serious daily briefing. Your reader is educated and broadly curious across geopolitics, economics, technology, science, energy, infrastructure, history, and culture.
-
-Today is ${new Date().toDateString()}. You have been given a list of real headlines from today's news. Your task:
-1. Choose the single most intellectually rich story — one that connects to larger systems, has historical depth, and opens multiple avenues of exploration. Avoid sports and pure celebrity news.
-2. Write a compelling doorway into that story.
-3. Generate six genuinely interesting questions it opens.
-
-You MUST respond with only a valid JSON object. No explanation, no markdown, no code fences. Raw JSON only.
-
-Schema:
-{
-  "headline": "A sharp newspaper-quality headline",
-  "domain_tag": "one of: Geopolitics | Economics | Technology | Science | Energy | Infrastructure | Culture | History",
-  "doorway": "Three to four sentences. Set the scene with authority. What happened, why it matters, what is genuinely uncertain. Write like a senior correspondent.",
-  "questions": [
-    { "tag": "Historical",   "text": "A question about how history led to this moment" },
-    { "tag": "Systemic",     "text": "A question about the larger system or mechanism at play" },
-    { "tag": "Geopolitical", "text": "A question about actors, power, and incentives" },
-    { "tag": "Economic",     "text": "A question about market forces or financial consequences" },
-    { "tag": "Scientific",   "text": "A question about the underlying technology or science" },
-    { "tag": "Wildcard",     "text": "An unexpected adjacent question that becomes fascinating because of this event" }
-  ]
-}`;
-
-      const excludeNote = excludeHeadline
-        ? `\n\nNote: an earlier pick for today was "${excludeHeadline}". Choose a different, genuinely distinct story this time.`
-        : '';
-      const userPrompt = `Here are today's headlines. Choose the best doorway and generate the expedition JSON:\n\n${digest}${excludeNote}`;
-      const raw = await callGemini(systemPrompt, userPrompt, true);
-      return validateExpedition(parseJson(raw));
+    async function requestNewExpedition(dateKey) {
+      const data = await apiRequest('/api/expedition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: dateKey }),
+      }, 58000);
+      return validateExpedition(data);
     }
 
     // ---- Archive (rolling local history of past daily doorways) ----
@@ -680,6 +647,8 @@ Schema:
         domain_tag: data.domain_tag,
         doorway: data.doorway,
         questions: data.questions,
+        sources: data.sources || [],
+        signals: data.signals || null,
         savedAt: Date.now(),
       };
       const keys = Object.keys(archive).sort().reverse();
@@ -718,7 +687,15 @@ Schema:
         <span class="domain-pill">${esc(data.domain_tag)}</span>
         <h1 class="doorway-headline">${esc(data.headline)}</h1>
         <div class="doorway-body"><p>${esc(data.doorway)}</p></div>
+        ${sourcesHtml(data.sources)}
       `;
+    }
+
+    function sourcesHtml(sources) {
+      const links = (sources || [])
+        .filter(s => /^https?:\/\//.test(s.url || ''))
+        .map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.title)}">${esc(s.source)}</a>`);
+      return links.length ? `<p class="doorway-sources">Reported by ${links.join(' · ')}</p>` : '';
     }
 
     function renderQuestions(data) {
@@ -833,32 +810,45 @@ Schema:
     }
 
     // ---- Loading today's expedition ----
-    async function fetchAndBuildToday(excludeHeadline) {
+    function cacheToday(data) {
+      todayExpedition = data;
+      try { localStorage.setItem('expedition-' + todayKeyDate(), JSON.stringify(data)); } catch (_) {}
+      saveToArchive(todayKeyDate(), data);
+    }
+
+    async function loadToday(fetcher) {
       document.getElementById('js-doorway').innerHTML = doorwaySkeletonHtml();
       document.getElementById('js-questions').innerHTML = questionsSkeletonHtml();
       document.getElementById('js-regenerate').innerHTML = '';
       try {
-        const articles = await fetchNews();
-        if (!articles.length) throw new Error('No articles returned from news API.');
-        todayExpedition = await buildExpedition(articles, excludeHeadline);
-        const key = 'expedition-' + todayKeyDate();
-        try { localStorage.setItem(key, JSON.stringify(todayExpedition)); } catch (_) {}
-        saveToArchive(todayKeyDate(), todayExpedition);
+        cacheToday(await (fetcher || fetchExpedition)(todayKeyDate()));
         showToday();
       } catch (err) {
         renderDoorwayError(err);
       }
     }
 
-    async function loadToday() {
-      await fetchAndBuildToday();
+    // After rendering from cache, pick up a story swapped on another device.
+    // Only redraws if the reader is still looking at today's doorway.
+    async function refreshTodayInBackground() {
+      try {
+        const fresh = await fetchExpedition(todayKeyDate());
+        const changed = !todayExpedition || fresh.headline !== todayExpedition.headline
+          || (fresh.sources || []).length !== (todayExpedition.sources || []).length;
+        if (!changed) return;
+        const onTodayScreen = !viewingArchiveDate && document.getElementById('view-main').style.display !== 'none';
+        cacheToday(fresh);
+        if (onTodayScreen) showToday();
+      } catch (_) {
+        // Cached copy is still perfectly readable; try again next open.
+      }
     }
 
     async function regenerate() {
       if (viewingArchiveDate) return;
-      const ok = confirm("Load a different story for today? This uses one more news + Gemini call and replaces today's expedition.");
+      const ok = confirm("Load a different story for today? This replaces today's expedition on all your devices.");
       if (!ok) return;
-      await fetchAndBuildToday(todayExpedition ? todayExpedition.headline : null);
+      await loadToday(requestNewExpedition);
     }
 
     async function openQuestion(idx, detour) {
@@ -879,29 +869,21 @@ Schema:
         <div class="skeleton sk-ln w-85"></div>
       `;
 
-      const lensGuide = {
-        'Simply explained':    'Explain this for a curious intelligent non-specialist. Use concrete analogies. Avoid jargon.',
-        'Go technical':        'Go deep into the technical or scientific mechanisms. Assume a well-educated reader who wants precision.',
-        'Economic lens':       'Focus on economic dimensions — incentives, market structures, costs, trade-offs, consequences.',
-        'Historical roots':    'Ground this in history. How did we arrive here? What are the deep roots and precedents?',
-        'Opposing views':      'Present genuine tensions and disagreements. Where do serious thoughtful people disagree, and why?',
-        'Second-order effects':'Think through downstream consequences. What might this change over 5–20 years?',
-      };
-
-      const lensNote = detour ? `\n\nLens: ${lensGuide[detour] || detour}` : '';
-
-      const systemPrompt = `You are a brilliant, measured intellectual guide for The Daily Expedition. You write with the depth and craft of a long-form magazine feature — flowing prose, not bullet points.
-
-Today's event: "${expedition.headline}"
-Context: ${expedition.doorway}
-
-Write 4–5 substantive paragraphs exploring the question. Use a subheading only if genuinely needed. Every paragraph should reveal something. End with one sentence that opens a new direction, leaving the reader curious.${lensNote}`;
-
-      const userPrompt = `Explore this question with depth and care: "${q.text}"`;
-
       try {
-        const answer = await callGemini(systemPrompt, userPrompt, false);
-        renderExploration(q, answer, idx, detour);
+        const data = await apiRequest('/api/explore', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date: viewingArchiveDate || todayKeyDate(),
+            headline: expedition.headline,
+            questionIndex: idx,
+            lens: detour || null,
+            // Only used for archive days saved before the server kept its own copy
+            doorway: expedition.doorway,
+            question: q.text,
+          }),
+        }, 58000);
+        renderExploration(q, data.text || '', idx, detour);
       } catch (err) {
         const retryArgs = idx + (detour ? `,'${escAttr(detour)}'` : '');
         document.getElementById('js-explore-content').innerHTML = `
@@ -979,11 +961,12 @@ Write 4–5 substantive paragraphs exploring the question. Use a subheading only
           todayExpedition = validateExpedition(JSON.parse(cached));
           saveToArchive(todayKeyDate(), todayExpedition);
           showToday();
+          refreshTodayInBackground();
           return;
         }
       } catch (_) {}
 
-      // Nothing cached (or cache was invalid) — fetch fresh
+      // Nothing cached (or cache was invalid) — fetch from the server
       await loadToday();
     }
 
