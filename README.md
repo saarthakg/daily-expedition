@@ -9,10 +9,12 @@ Single-page web app, no build step, deploys to Netlify in minutes, and works wel
 - **Many sources, one doorway** — Pulls today's headlines from BBC, NPR, the Guardian, NYT, Al Jazeera, DW, CNBC, Ars Technica, Nature, Wikipedia's *In the news* and (optionally) Currents, then groups articles about the same story across outlets. Each story is scored by how widely it's covered and whether it's trending on Bluesky or Hacker News, and Gemini picks the most intellectually rich one from that shortlist — with summaries in hand, so it doesn't invent details.
 - **Links to the reporting** — Each doorway shows which outlets covered the story ("Reported by BBC · NPR · Guardian…"), linking to their articles.
 - **Prediction markets as context** — Gemini attaches any Polymarket markets that bear directly on the story, and explorations can cite what the market currently expects.
+- **The conversation** — A panel under the doorway shows where the story is trending on Bluesky, how busy its Hacker News thread is, what prediction markets give it, and whether it's in Wikipedia's *In the news* — each linking out.
+- **Public debate lens** — Maps the camps in the public argument using the top Bluesky posts and HN comments captured with the story (framed as a non-representative sample), then searches for the perspectives that sample misses.
 - **Six exploration threads** — Tagged questions (Historical, Systemic, Geopolitical, Economic, Scientific, Wildcard) tied to that day's story.
 - **Deep dives, checked against the live web** — Long-form explorations in flowing prose, written as you watch. Gemini uses Google Search to check current facts, and each claim it grounds gets a superscript citation linking to the source, with Google's Search Suggestions shown underneath.
 - **Reading history** — Finished explorations are saved in your browser, so reopening one is instant; **Ask again** gets a fresh take. Questions you've read show a ✓.
-- **Six analytical lenses** — Reframe any answer: Simply explained, Go technical, Economic lens, Historical roots, Opposing views, Second-order effects.
+- **Seven analytical lenses** — Reframe any answer: Simply explained, Go technical, Economic lens, Historical roots, Opposing views, Second-order effects, Public debate.
 - **Built once a day, on the server** — A scheduled function builds the expedition at 6am Eastern and stores it in Netlify Blobs, so opening the app is instant and every device sees the same story. If you're up before the build, the first open of the day builds it.
 - **Daily local cache** — The doorway and six questions are also kept in `localStorage`, so the app renders immediately and then quietly checks the server for a newer version (e.g. a story you swapped on another device).
 - **Archive** — Every day's doorway and questions are also kept in a rolling 14-day local history, browsable from the Archive tab. Old threads stay explorable (each tap still calls Gemini fresh).
@@ -48,9 +50,10 @@ flowchart TD
 1. **Gather** (`netlify/lib/sources.mjs`) — Fetches ~12 RSS feeds, Wikipedia *In the news*, Hacker News, Bluesky trends, Polymarket, and Currents (if a key is set) in parallel, each with an 8-second timeout. A source that fails is recorded and skipped.
 2. **Cluster and score** (`netlify/lib/cluster.mjs`) — Groups articles about the same story by headline word overlap. Scores each story by distinct outlets covering it, plus boosts for Wikipedia, Hacker News points, and a matching Bluesky trend.
 3. **Pick and write** (`netlify/lib/expedition.mjs`) — Sends the top ~30 stories (each with summary, other outlets' headlines, and attention signals) plus the prediction markets to Gemini, which chooses one, writes the doorway and six questions, and names any relevant markets.
-4. **Store** (`netlify/lib/store.mjs`) — Saves the day to Netlify Blobs, including the candidate shortlist (reused by regenerate for 3 hours) and earlier versions (so an exploration from a page loaded before a swap still works).
-5. **Explore** (`netlify/lib/explore.mjs`) — Each question or lens is answered by Gemini with Google Search grounding, starting from the chosen story's reporting. The answer streams to the browser as newline-delimited JSON (`{type:"text"}` deltas, then a `{type:"done"}` event with citations, their positions, and Search Suggestions). If grounding is refused — e.g. its daily quota is used up — the answer is written without it and says so.
-6. **History** — The browser keeps finished explorations in `localStorage` (`expedition-explorations`, same 14-day window as the archive). Nothing about explorations is stored on the server: Google's grounding terms allow keeping answers as the reader's own history, but not caching them or showing them to anyone else.
+4. **Capture the conversation** (`netlify/lib/conversation.mjs`) — For the chosen story, fetches the most-liked posts from its Bluesky trend feed (no login needed), Bluesky search results for a query Gemini suggests (only if a free app password is configured), and Hacker News's top-ranked comments. Posts from authors who opted out of logged-out viewing, or labelled adult/graphic, are skipped. The posts are stored with the day but never sent to the browser — the panel links out, and only the Public debate lens reads them.
+5. **Store** (`netlify/lib/store.mjs`) — Saves the day to Netlify Blobs, including the candidate shortlist (reused by regenerate for 3 hours) and earlier versions (so an exploration from a page loaded before a swap still works).
+6. **Explore** (`netlify/lib/explore.mjs`) — Each question or lens is answered by Gemini with Google Search grounding, starting from the chosen story's reporting. The answer streams to the browser as newline-delimited JSON (`{type:"text"}` deltas, then a `{type:"done"}` event with citations, their positions, and Search Suggestions). If grounding is refused — e.g. its daily quota is used up — the answer is written without it and says so.
+7. **History** — The browser keeps finished explorations in `localStorage` (`expedition-explorations`, same 14-day window as the archive). Nothing about explorations is stored on the server: Google's grounding terms allow keeping answers as the reader's own history, but not caching them or showing them to anyone else.
 
 ## Tech stack
 
@@ -158,6 +161,7 @@ localStorage.removeItem('expedition-explorations');
 ├── netlify/lib/
 │   ├── sources.mjs             # Fetches and normalises every news/social/market source
 │   ├── cluster.mjs             # Groups the same story across outlets and scores attention
+│   ├── conversation.mjs        # Bluesky posts + HN comments for the chosen story
 │   ├── expedition.mjs          # Story-picking prompt, Gemini call, validation
 │   ├── explore.mjs             # Exploration prompt, Google Search grounding, streaming, citations
 │   └── store.mjs               # Netlify Blobs read/write
@@ -173,6 +177,10 @@ localStorage.removeItem('expedition-explorations');
 | `GEMINI_API_KEY` | Yes | Picking the story and writing explorations |
 | `CURRENTS_API_KEY` | No | Adds Currents as one more headline source |
 | `EXPEDITION_TZ` | No | Time zone whose date the 6am build uses (default `America/New_York`) |
+| `BSKY_HANDLE` | No | Your Bluesky handle (e.g. `you.bsky.social`) — enables Bluesky post search |
+| `BSKY_APP_PASSWORD` | No | A Bluesky **app password** (Settings → Privacy and security → App passwords), not your account password |
+
+Without the Bluesky pair, the conversation still comes from trend feeds and Hacker News; search just finds posts for stories that aren't trending.
 
 Never commit API keys. If a key is exposed, rotate it in the provider dashboard and update Netlify (or your local `.env`).
 
@@ -204,7 +212,7 @@ Typical daily use stays within free tiers:
 
 | Service | Free tier | Typical day |
 |---------|-----------|-------------|
-| RSS, Wikipedia, Hacker News, Bluesky, Polymarket | Free, no keys | ~16 requests at the morning build |
+| RSS, Wikipedia, Hacker News, Bluesky, Polymarket | Free (Bluesky search needs a free account) | ~16–30 requests at the morning build |
 | Currents (optional) | 600 requests/day | 1 |
 | Gemini (`gemini-2.5-flash`) | Generous daily quota | 1 doorway + explorations you open |
 | Google Search grounding | Free daily allowance for Gemini 2.5 models | 1 per exploration you open |
