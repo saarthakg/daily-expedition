@@ -549,6 +549,20 @@
       line-height: 1.6;
     }
 
+    .listen-row { display: flex; gap: 10px; margin: -0.75rem 0 1.25rem; }
+    .doorway-body + .listen-row { margin: 0.9rem 0 0; }
+    .listen-btn, .listen-stop {
+      font-family: var(--font-body);
+      font-size: 12px;
+      color: var(--ink-light);
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      padding: 3px 12px;
+      cursor: pointer;
+    }
+    .listen-btn:hover, .listen-stop:hover { color: var(--ink); border-color: var(--ink-mid); }
+
     .reflection-prompt { display: block; }
     .reflection-input {
       display: block;
@@ -837,6 +851,7 @@
         <span class="domain-pill">${esc(data.domain_tag)}</span>
         <h1 class="doorway-headline">${esc(data.headline)}</h1>
         <div class="doorway-body"><p>${esc(data.doorway)}</p></div>
+        ${listenControlsHtml(`${data.headline}. ${data.doorway}`)}
         ${sourcesHtml(data.sources)}
         ${conversationHtml(data)}
       `;
@@ -905,6 +920,113 @@
         </li>
       `;
       }).join('');
+    }
+
+    // ---- Listen mode: the browser's own speech synthesis, no API ----
+    // Chrome silently stops long utterances after ~15s, so text is queued a
+    // sentence or two at a time.
+    const canListen = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+    const listenTexts = [];   // text for each rendered Listen control, by index
+    let listening = null;     // { index, paused }
+
+    function listenControlsHtml(text) {
+      if (!canListen) return '';
+      const i = listenTexts.push(text) - 1;
+      return `
+        <div class="listen-row" data-listen="${i}">
+          <button class="listen-btn" onclick="toggleListen(${i})">▶ Listen</button>
+          <button class="listen-stop" onclick="stopListening()" hidden>Stop</button>
+        </div>
+      `;
+    }
+
+    function speakableChunks(text) {
+      const plain = text
+        .replace(/^#{1,3}\s+/gm, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
+      const chunks = [];
+      for (const para of plain.split(/\n{2,}/)) {
+        let current = '';
+        for (const sentence of para.match(/[^.!?]+[.!?]+["'”’)]*\s*|[^.!?]+$/g) || []) {
+          if ((current + sentence).length > 220 && current) { chunks.push(current.trim()); current = ''; }
+          current += sentence;
+          // A run-on sentence still has to fit: break it at word boundaries
+          while (current.length > 240) {
+            const cut = current.lastIndexOf(' ', 220);
+            const at = cut > 80 ? cut : 220;
+            chunks.push(current.slice(0, at).trim());
+            current = current.slice(at);
+          }
+        }
+        if (current.trim()) chunks.push(current.trim());
+      }
+      return chunks;
+    }
+
+    function pickVoice() {
+      const voices = speechSynthesis.getVoices().filter(v => /^en(-|_|$)/i.test(v.lang));
+      return voices.find(v => /natural|premium|enhanced|neural/i.test(v.name))
+        || voices.find(v => /google/i.test(v.name))
+        || voices.find(v => v.default)
+        || voices[0] || null;
+    }
+
+    function updateListenControls() {
+      document.querySelectorAll('.listen-row').forEach(row => {
+        const mine = listening && Number(row.dataset.listen) === listening.index;
+        row.querySelector('.listen-btn').textContent = !mine ? '▶ Listen' : listening.paused ? '▶ Resume' : '❚❚ Pause';
+        row.querySelector('.listen-stop').hidden = !mine;
+      });
+    }
+
+    // Pause is "remember the sentence, then cancel": speechSynthesis.pause() is
+    // ignored by Chrome's Google voices and unreliable on Android.
+    function speakFrom(session) {
+      const gen = ++session.gen;
+      const voice = pickVoice();
+      session.chunks.slice(session.pos).forEach((chunk, k) => {
+        const n = session.pos + k;
+        const u = new SpeechSynthesisUtterance(chunk);
+        if (voice) { u.voice = voice; u.lang = voice.lang; }
+        u.rate = 1;
+        const live = () => listening === session && session.gen === gen;
+        u.onstart = () => { if (live()) session.pos = n; };
+        if (n === session.chunks.length - 1) u.onend = () => { if (live()) { listening = null; updateListenControls(); } };
+        u.onerror = (e) => {
+          if (!live() || e.error === 'interrupted' || e.error === 'canceled') return;
+          console.warn('Listen: speech failed —', e.error);
+          listening = null;
+          updateListenControls();
+        };
+        speechSynthesis.speak(u);
+      });
+    }
+
+    function toggleListen(index) {
+      if (listening && listening.index === index) {
+        listening.paused = !listening.paused;
+        if (listening.paused) {
+          listening.gen++;           // orphan the queued utterances' callbacks
+          speechSynthesis.cancel();
+        } else {
+          speakFrom(listening);
+        }
+        updateListenControls();
+        return;
+      }
+      stopListening();
+      const chunks = speakableChunks(listenTexts[index] || '');
+      if (!chunks.length) return;
+      listening = { index, paused: false, chunks, pos: 0, gen: 0 };
+      speakFrom(listening);
+      updateListenControls();
+    }
+
+    function stopListening() {
+      if (!canListen) return;
+      listening = null;
+      speechSynthesis.cancel();
+      updateListenControls();
     }
 
     // ---- Reflection journal: one entry per day, only in this browser ----
@@ -1059,6 +1181,7 @@
     }
 
     function showScreen(name) {
+      stopListening();
       document.getElementById('view-main').style.display = name === 'main' ? 'block' : 'none';
       document.getElementById('view-archive').style.display = name === 'archive-list' ? 'block' : 'none';
       document.getElementById('view-explore').style.display = name === 'explore' ? 'block' : 'none';
@@ -1439,6 +1562,7 @@
       const content = document.getElementById('js-explore-content');
       content.innerHTML = `
         <p class="explore-question">${esc(detour ? detour + ' — ' + q.text : q.text)}</p>
+        ${listenControlsHtml(`${q.text}\n\n${result.text}`)}
         <div class="explore-body">${proseHtml(result.text, result.marks)}</div>
         ${notes.map(n => `<p class="explore-note">${esc(n)}</p>`).join('')}
         ${savedAt ? `<p class="explore-note">From your reading ${esc(formatSavedAt(savedAt))} ·
