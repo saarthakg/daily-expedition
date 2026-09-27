@@ -2,7 +2,8 @@
 // POST /api/expedition {date}            → replace today's story with a different one
 
 import { buildExpedition, publicView, isCurrentSomewhere, DATE_RE, HttpError } from "../lib/expedition.mjs";
-import { openStore, getDay, putDay, saveFirstBuild } from "../lib/store.mjs";
+import { openStore, getDay, putDay, saveFirstBuild, getRecentDays } from "../lib/store.mjs";
+import { PREFERENCES } from "../lib/preferences.mjs";
 
 const MAX_REGENERATIONS = 5;
 const CANDIDATE_REUSE_MS = 3 * 60 * 60 * 1000; // regenerate re-reads the news if the pool is older than this
@@ -25,7 +26,8 @@ async function getExpedition(store, dateKey) {
   if (existing) return existing;
   if (!isCurrentSomewhere(dateKey)) throw new HttpError(404, "No expedition was saved for that day.");
 
-  const record = await buildExpedition(dateKey);
+  const recent = await getRecentDays(store, dateKey, PREFERENCES.varietyDays);
+  const record = await buildExpedition(dateKey, { recent });
   return saveFirstBuild(store, dateKey, { ...record, trigger: "on-demand", regenerations: 0, excluded: [], history: [] });
 }
 
@@ -42,7 +44,8 @@ async function regenerate(store, dateKey) {
   const poolIsFresh = pool && Date.now() - Date.parse(pool.gatheredAt) < CANDIDATE_REUSE_MS;
   const excluded = [...(current.excluded || []), current.headline];
 
-  const record = await buildExpedition(dateKey, { excluded, candidates: poolIsFresh ? pool : null });
+  const recent = await getRecentDays(store, dateKey, PREFERENCES.varietyDays);
+  const record = await buildExpedition(dateKey, { excluded, candidates: poolIsFresh ? pool : null, recent });
 
   // Keep earlier versions so explorations of an older on-screen story still resolve.
   const { candidates, history, ...previous } = current;

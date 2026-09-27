@@ -4,6 +4,7 @@
 import { gatherSources } from "./sources.mjs";
 import { clusterStories, describeCluster } from "./cluster.mjs";
 import { gatherConversation } from "./conversation.mjs";
+import { PREFERENCES } from "./preferences.mjs";
 
 export const GEMINI_MODEL = "gemini-2.5-flash";
 const CANDIDATE_LIMIT = 25;
@@ -157,7 +158,7 @@ export function formatMarket(m) {
   return `${m.lead.question} — market says ${m.lead.outcome} ${pct < 1 ? "<1" : pct}%`;
 }
 
-function expeditionPrompts({ stories, markets }, dateKey, excluded) {
+function expeditionPrompts({ stories, markets }, dateKey, excluded, recent = []) {
   const digest = stories.map((s, i) => {
     const others = s.reporting
       .filter((r) => r.title !== s.title)
@@ -205,20 +206,30 @@ Schema:
   "search_query": "Iran Hormuz deal Trump"
 }`;
 
+  const interests = PREFERENCES.interests.filter(Boolean);
+  const avoid = PREFERENCES.avoid.filter(Boolean);
+  const preferenceNote = interests.length || avoid.length
+    ? `\n\nThe reader's standing preferences (guidance, not rules — a clearly richer story still wins):${interests.length ? `\n- Favour: ${interests.join("; ")}` : ""}${avoid.length ? `\n- Steer away from: ${avoid.join("; ")}` : ""}`
+    : "";
+
+  const recentNote = recent.length
+    ? `\n\nRecent picks (avoid repeating the same story, and prefer a different domain from the last two days, unless today brings a genuinely major new development):\n${recent.map((r) => `- ${r.date} [${r.domain_tag}] ${r.headline}`).join("\n")}`
+    : "";
+
   const excludeNote = excluded.length
     ? `\n\nEarlier picks for today were: ${excluded.map((h) => `"${h}"`).join(", ")}. Choose a different, genuinely distinct story this time.`
     : "";
 
-  const userPrompt = `Candidate stories:\n\n${digest}\n\nPrediction markets:\n${marketList || "(none available today)"}${excludeNote}`;
+  const userPrompt = `Candidate stories:\n\n${digest}\n\nPrediction markets:\n${marketList || "(none available today)"}${preferenceNote}${recentNote}${excludeNote}`;
 
   return { systemPrompt, userPrompt };
 }
 
 // ---- Build a day ----
 
-export async function buildExpedition(dateKey, { excluded = [], candidates = null } = {}) {
+export async function buildExpedition(dateKey, { excluded = [], candidates = null, recent = [] } = {}) {
   const pool = candidates || await prepareCandidates();
-  const { systemPrompt, userPrompt } = expeditionPrompts(pool, dateKey, excluded);
+  const { systemPrompt, userPrompt } = expeditionPrompts(pool, dateKey, excluded, recent);
 
   const { text, truncated } = await callGemini(systemPrompt, userPrompt, { json: true });
   if (truncated) throw new HttpError(502, "Gemini response was cut off before completing. Please try again.");

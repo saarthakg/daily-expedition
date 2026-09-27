@@ -19,12 +19,14 @@ Single-page web app, no build step, deploys to Netlify in minutes, and works wel
 - **Reflection journal** — "What do you understand now that you didn't this morning?" has a box that saves as you type — one entry per day, kept in your browser. It shows on that day's page and is marked in the archive.
 - **Listen** — Read-aloud for the doorway and every exploration, using your browser's built-in voices (no API).
 - **What's happened since** — On any past day in the archive, a grounded update on how the story developed after it was picked.
+- **Sunday week in review** — On Sundays, a synthesis that connects the week's stories (and your journal entries from that week) instead of retelling them, and names what to watch next.
+- **Topic preferences and variety** — `netlify/lib/preferences.mjs` lists topics to favour or avoid; the editor also sees the last five days' picks so the same story or domain doesn't win day after day.
 - **Built once a day, on the server** — A scheduled function builds the expedition at 6am Eastern and stores it in Netlify Blobs, so opening the app is instant and every device sees the same story. If you're up before the build, the first open of the day builds it.
 - **Daily local cache** — The doorway and six questions are also kept in `localStorage`, so the app renders immediately and then quietly checks the server for a newer version (e.g. a story you swapped on another device).
 - **Archive** — Every day's doorway and questions are also kept in a rolling 14-day local history, browsable from the Archive tab. Old threads stay explorable (each tap still calls Gemini fresh).
 - **Regenerate** — Not feeling today's story? One tap picks a different one from the same shortlist, steering Gemini away from every earlier pick. Capped at five swaps a day.
 - **Resilient by default** — Every news source is optional: one failing feed is logged and skipped. Gemini's JSON is schema-checked before it's trusted, truncated responses are detected, requests time out instead of hanging, and every failure state offers a "Try again" button.
-- **Installable PWA** — A web app manifest and generated icon set make "Add to Home Screen" produce a real app icon on iOS and Android, not a page screenshot.
+- **Installable PWA, works offline** — A web app manifest and icon set make "Add to Home Screen" produce a real app icon. A service worker keeps the page and the latest expedition available offline, and explorations you've read open from local history.
 - **Mobile-first** — Responsive typography, safe-area insets, dark mode, Add to Home Screen on iOS and Android.
 - **Keys stay server-side, and so do prompts** — API keys live only in Netlify environment variables. The browser never sends prompt text: it asks for a date, a question number, and one of six lenses, and the server looks the question up in its stored copy of the day. Both endpoints use Netlify's built-in per-IP rate limiting.
 
@@ -69,7 +71,7 @@ flowchart TD
 | News | Free RSS feeds, Wikipedia, Hacker News (Algolia), Bluesky public API, Polymarket, optional [Currents API](https://currentsapi.services) |
 | AI | [Google Gemini](https://aistudio.google.com) (`gemini-2.5-flash`, up to 8192 output tokens) |
 | Hosting | [Netlify](https://www.netlify.com) — auto-deploys on push to `main` when connected to GitHub |
-| App shell | `manifest.json` + `icons/` — installable PWA, no service worker |
+| App shell | `manifest.json` + `icons/` + `sw.js` — installable PWA with offline support |
 
 ## Getting started
 
@@ -156,6 +158,7 @@ localStorage.removeItem('expedition-reflections'); // your journal — only if y
 ```
 ├── index.html                  # UI, styles, client logic (cache, archive, regenerate)
 ├── manifest.json               # Web app manifest (installable PWA)
+├── sw.js                       # Service worker: offline page + latest expedition
 ├── icons/                      # Generated app icons (favicon, apple-touch, 192/512)
 ├── netlify.toml                # Functions dir, Node version, publish dir
 ├── package.json                # @netlify/blobs
@@ -167,6 +170,7 @@ localStorage.removeItem('expedition-reflections'); // your journal — only if y
 │   ├── sources.mjs             # Fetches and normalises every news/social/market source
 │   ├── cluster.mjs             # Groups the same story across outlets and scores attention
 │   ├── conversation.mjs        # Bluesky posts + HN comments for the chosen story
+│   ├── preferences.mjs         # Topics to favour/avoid, and how many recent days to vary from
 │   ├── expedition.mjs          # Story-picking prompt, Gemini call, validation
 │   ├── explore.mjs             # Exploration prompt, Google Search grounding, streaming, citations
 │   └── store.mjs               # Netlify Blobs read/write
@@ -174,6 +178,20 @@ localStorage.removeItem('expedition-reflections'); // your journal — only if y
 ├── LICENSE
 └── README.md
 ```
+
+## Preferences
+
+Edit `netlify/lib/preferences.mjs` and push; the next build uses it.
+
+```js
+export const PREFERENCES = {
+  interests: ["energy and climate", "science and research"], // favour when stories are close
+  avoid: ["US electoral horse-race politics"],               // steer away unless nothing else is substantial
+  varietyDays: 5,                                             // recent picks the editor avoids repeating (0 = off)
+};
+```
+
+These are guidance for Gemini, not hard filters: a clearly richer story still wins.
 
 ## Environment variables
 

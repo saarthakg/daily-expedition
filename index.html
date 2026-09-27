@@ -283,6 +283,28 @@
     }
     .doorway-sources a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
+    .week-card {
+      display: block;
+      width: 100%;
+      text-align: left;
+      margin-top: 1.5rem;
+      padding: 1rem 1.1rem;
+      background: var(--paper-warm);
+      border: none;
+      border-left: 3px solid var(--accent);
+      cursor: pointer;
+      font-family: var(--font-body);
+    }
+    .week-card .eyebrow { display: block; margin-bottom: 0.3rem; color: var(--accent); }
+    .week-card-title {
+      display: block;
+      font-family: var(--font-display);
+      font-size: clamp(18px, 3.5vw, 22px);
+      color: var(--ink);
+    }
+    .week-card-sub { display: block; margin-top: 0.2rem; font-size: 13px; font-style: italic; color: var(--ink-mid); }
+    .week-card:hover .week-card-title { color: var(--accent); }
+
     .since-link {
       display: inline-block;
       margin-top: 1.25rem;
@@ -870,6 +892,12 @@
         ${conversationHtml(data)}
         ${archived && viewingArchiveDate < todayKeyDate() ? `
           <button class="since-link" onclick="openSince()">What's happened since? →</button>` : ''}
+        ${isSunday(viewingArchiveDate || todayKeyDate()) && weekHasEnoughDays(viewingArchiveDate || todayKeyDate()) ? `
+          <button class="week-card" onclick="openWeek()">
+            <span class="eyebrow">Sunday</span>
+            <span class="week-card-title">The week in review</span>
+            <span class="week-card-sub">How this week's stories connect${weekReflections(viewingArchiveDate || todayKeyDate()).length ? ' — with your reflections' : ''} →</span>
+          </button>` : ''}
       `;
     }
 
@@ -1179,9 +1207,11 @@
     }
 
     function renderDoorwayError(err) {
+      const why = !navigator.onLine
+        ? "You're offline, and today's expedition hasn't been saved on this device yet. Your archive still works."
+        : "The expedition couldn't load today — if this keeps happening, check that GEMINI_API_KEY is set in your Netlify environment variables.";
       document.getElementById('js-doorway').innerHTML = `
-        <p class="error-msg">The expedition couldn't load today — this is usually a configuration issue.
-          Double-check that both API keys are set in your Netlify environment variables.
+        <p class="error-msg">${why}
           <span class="error-detail">${esc(err.message)}</span>
         </p>
         <button class="retry-btn" onclick="loadToday()">Try again</button>
@@ -1396,6 +1426,13 @@
         if (!finished) throw fail('The answer was cut short. Please try again.');
         return { ...finished, text };
       } catch (err) {
+        if (!navigator.onLine) {
+          throw fail("You're offline. Explorations you've already read still open; new ones need a connection.");
+        }
+        if (err instanceof TypeError && !text) {
+          // fetch() rejects with a TypeError when the server can't be reached at all
+          throw fail("Couldn't reach the server — check your connection. Explorations you've already read still open.");
+        }
         if (controller.signal.aborted) {
           throw Object.assign(fail(controller.signal.reason === 'timeout' ? 'Request timed out. Please try again.' : 'Cancelled.'), { cancelled: controller.signal.reason !== 'timeout' });
         }
@@ -1410,7 +1447,7 @@
     // Threads are registered once and referred to by number in onclick handlers.
     const threads = [];
     function threadFor(spec) {
-      const id = spec.kind === 'q' ? 'q' + spec.idx : spec.kind === 'since' ? 'since' : 'ask:' + spec.text;
+      const id = spec.kind === 'q' ? 'q' + spec.idx : spec.kind === 'ask' ? 'ask:' + spec.text : spec.kind;
       let n = threads.findIndex(t => t.id === id);
       if (n === -1) n = threads.push({ ...spec, id }) - 1;
       return n;
@@ -1419,22 +1456,53 @@
     function threadQuestion(t) {
       if (t.kind === 'q') return expedition.questions[t.idx];
       if (t.kind === 'since') return { tag: 'Since', text: `What's happened since ${formatArchiveDate(viewingArchiveDate)}?` };
+      if (t.kind === 'week') return { tag: 'Week', text: 'The week in review: how this week’s stories connect' };
       return { tag: 'Your question', text: t.text };
     }
 
     function threadHistorySegment(t) {
-      return t.kind === 'q' ? t.idx : t.kind === 'since' ? 'since' : 'ask:' + t.text;
+      return t.kind === 'q' ? t.idx : t.kind === 'ask' ? 'ask:' + t.text : t.kind;
     }
 
     function threadPayload(t) {
       // doorway + question are only used for archive days saved before the server kept its own copy
       if (t.kind === 'q') return { questionIndex: t.idx, doorway: expedition.doorway, question: expedition.questions[t.idx].text };
       if (t.kind === 'since') return { since: true };
+      if (t.kind === 'week') return { week: true, reflections: weekReflections(viewingArchiveDate || todayKeyDate()) };
       return { customQuestion: t.text, parentIndex: t.parent };
     }
 
     function openSince() {
       return openThread(threadFor({ kind: 'since' }), null);
+    }
+
+    function openWeek() {
+      return openThread(threadFor({ kind: 'week' }), null);
+    }
+
+    // The reader's journal entries for the seven days ending dateKey
+    function weekReflections(dateKey) {
+      const all = getReflections();
+      const end = new Date(dateKey + 'T12:00:00');
+      const out = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(end.getTime() - i * 86400000);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (all[key]) out.push({ date: key, text: all[key].text });
+      }
+      return out;
+    }
+
+    function isSunday(dateKey) {
+      return new Date(dateKey + 'T12:00:00').getDay() === 0;
+    }
+
+    // Offer the week in review only when there's a week to review — the server
+    // needs three stored days, and the local archive is a good stand-in.
+    function weekHasEnoughDays(dateKey) {
+      const end = new Date(dateKey + 'T12:00:00').getTime();
+      const start = new Date(end - 6 * 86400000).toISOString().slice(0, 10);
+      return Object.keys(getArchive()).filter(k => k >= start && k <= dateKey).length >= 3;
     }
 
     function openQuestion(idx, detour, askAgain) {
@@ -1595,7 +1663,7 @@
           <button class="text-link-btn inline" onclick="openThread(${askAgainArgs})">Ask again</button></p>` : ''}
         ${sourcesListHtml(result)}
         ${askFormHtml('js-ask-followup', 'Ask a follow-up', parent)}
-        ${thread.kind === 'since' ? '' : `
+        ${thread.kind === 'since' || thread.kind === 'week' ? '' : `
         <div class="detour-section">
           <p class="detour-label">Explore through a different lens</p>
           <div class="detour-chips">${chips}</div>
@@ -1656,6 +1724,11 @@
     }
 
     init();
+
+    // Offline support (see sw.js). Registration failing just means no offline mode.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+    }
   </script>
 </body>
 </html>
