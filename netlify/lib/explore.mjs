@@ -9,7 +9,11 @@
 import { GEMINI_MODEL, LENS_GUIDE, HttpError, formatMarket, describeDate, DATE_RE } from "./expedition.mjs";
 
 function explorePrompts(version, question, lens, dateKey) {
-  const lensNote = lens ? `\n\nLens: ${LENS_GUIDE[lens]}` : "";
+  // A lens has to shape the whole piece. Tacked on after the writing brief, the
+  // model answered the base question and gave the lens a paragraph or two.
+  const lensNote = lens
+    ? `\n\nThe reader chose the "${lens}" lens. Write the whole piece through it — it should decide what each paragraph is about, not just colour one of them: ${LENS_GUIDE[lens]} Background belongs only where the lens needs it.`
+    : "";
 
   const reporting = (version.reporting || [])
     .map((r) => `- ${r.source}: ${r.title}${r.summary ? ` — ${r.summary}` : ""}`)
@@ -39,7 +43,9 @@ Use Google Search to check current facts, figures, and developments before relyi
 
 Write 4–5 substantive paragraphs exploring the question. Use a subheading only if genuinely needed. Every paragraph should reveal something. End with one sentence that opens a new direction, leaving the reader curious.${lensNote}`;
 
-  const userPrompt = `Explore this question with depth and care: "${question}"`;
+  const userPrompt = lens
+    ? `Explore this question through the "${lens}" lens, with depth and care: "${question}"`
+    : `Explore this question with depth and care: "${question}"`;
 
   return { systemPrompt, userPrompt };
 }
