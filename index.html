@@ -430,6 +430,34 @@
 
     .text-link-btn.inline { font-size: inherit; font-style: inherit; padding: 0; color: var(--accent); }
 
+    .ask-form { margin-top: 2rem; }
+    .ask-form .detour-label { display: block; }
+    .ask-row { display: flex; gap: 8px; align-items: stretch; }
+    .ask-input {
+      flex: 1;
+      min-width: 0;
+      font-family: var(--font-body);
+      font-size: 16px; /* 16px stops iOS zooming on focus */
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      padding: 8px 10px;
+    }
+    .ask-input::placeholder { color: var(--ink-light); font-style: italic; }
+    .ask-input:focus { outline: none; border-color: var(--ink-mid); }
+    .ask-btn {
+      font-family: var(--font-body);
+      font-size: 13px;
+      color: var(--ink-mid);
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+      padding: 0 16px;
+      cursor: pointer;
+    }
+    .ask-btn:hover { border-color: var(--ink-mid); color: var(--ink); }
+
     .explore-note {
       margin-top: 1.25rem;
       font-size: 12px;
@@ -607,6 +635,8 @@
           <li class="sk-row"><div class="skeleton sk-tag"></div><div class="skeleton sk-q w-72"></div></li>
         </ul>
       </section>
+
+      <section id="js-ask" style="padding-bottom:1rem"></section>
 
       <section id="js-regenerate" style="padding-bottom:2rem"></section>
     </main>
@@ -845,6 +875,57 @@
       }).join('');
     }
 
+    function askFormHtml(id, label, parent) {
+      const parentArg = Number.isInteger(parent) ? parent : 'null';
+      return `
+        <form class="ask-form" onsubmit="return submitAsk(event, ${parentArg})">
+          <label class="detour-label" for="${id}">${esc(label)}</label>
+          <div class="ask-row">
+            <input id="${id}" class="ask-input" name="q" maxlength="280" autocomplete="off"
+                   placeholder="What else do you want to know about this story?" />
+            <button class="ask-btn" type="submit">Ask</button>
+          </div>
+        </form>
+      `;
+    }
+
+    function submitAsk(event, parent) {
+      event.preventDefault();
+      const text = event.target.q.value.replace(/\s+/g, ' ').trim();
+      if (text.length >= 5) askOwnQuestion(text, parent);
+      else event.target.q.focus();
+      return false;
+    }
+
+    // Questions the reader asked about this day's story, from their reading history
+    function askedQuestions(dateKey, headline) {
+      const prefix = explorationKey(dateKey, headline, 'ask:', '').slice(0, -1);
+      const seen = new Set();
+      for (const key of Object.keys(getExplorations())) {
+        if (key.startsWith(prefix)) seen.add(key.slice(prefix.length, key.lastIndexOf('|')));
+      }
+      return [...seen];
+    }
+
+    function renderAsk(data) {
+      const el = document.getElementById('js-ask');
+      const asked = askedQuestions(viewingArchiveDate || todayKeyDate(), data.headline);
+      el.innerHTML = `
+        ${asked.length ? `
+          <p class="eyebrow">Your questions</p>
+          <ul class="questions-list">
+            ${asked.map(text => `
+              <li class="question-row read" onclick="openThread(${threadFor({ kind: 'ask', text })})" role="button" tabindex="0"
+                  onkeydown="if(event.key==='Enter')this.click()">
+                <span class="question-tag">Yours</span>
+                <span class="question-text">${esc(text)}</span>
+                <span class="question-arrow" title="Read">✓</span>
+              </li>`).join('')}
+          </ul>` : ''}
+        ${askFormHtml('js-ask-main', 'Ask your own question', null)}
+      `;
+    }
+
     function renderArchiveBanner() {
       const banner = document.getElementById('js-archive-banner');
       if (!viewingArchiveDate) {
@@ -902,6 +983,7 @@
         renderArchiveBanner();
         renderDoorway(expedition, false);
         renderQuestions(expedition);
+        renderAsk(expedition);
         renderRegenerateControl();
       }
     }
@@ -942,6 +1024,7 @@
       renderArchiveBanner();
       renderDoorway(item, true);
       renderQuestions(item);
+      renderAsk(item);
       renderRegenerateControl();
     }
 
@@ -1012,6 +1095,7 @@
         searchSuggestions: result.searchSuggestions || '',
         grounded: result.grounded,
         truncated: result.truncated,
+        question: result.question || '',
         savedAt: Date.now(),
       };
       // Keep what the archive can still reach, newest first, within a size budget
@@ -1090,8 +1174,38 @@
       }
     }
 
-    async function openQuestion(idx, detour, askAgain) {
-      const q = expedition.questions[idx];
+    // A thread is one of the day's six questions or one the reader asked.
+    // Threads are registered once and referred to by number in onclick handlers.
+    const threads = [];
+    function threadFor(spec) {
+      const id = spec.kind === 'q' ? 'q' + spec.idx : 'ask:' + spec.text;
+      let n = threads.findIndex(t => t.id === id);
+      if (n === -1) n = threads.push({ ...spec, id }) - 1;
+      return n;
+    }
+
+    function threadQuestion(t) {
+      return t.kind === 'q' ? expedition.questions[t.idx] : { tag: 'Your question', text: t.text };
+    }
+
+    function threadPayload(t) {
+      return t.kind === 'q'
+        // doorway + question are only used for archive days saved before the server kept its own copy
+        ? { questionIndex: t.idx, doorway: expedition.doorway, question: expedition.questions[t.idx].text }
+        : { customQuestion: t.text, parentIndex: t.parent };
+    }
+
+    function openQuestion(idx, detour, askAgain) {
+      return openThread(threadFor({ kind: 'q', idx }), detour, askAgain);
+    }
+
+    function askOwnQuestion(text, parent) {
+      return openThread(threadFor({ kind: 'ask', text, parent: Number.isInteger(parent) ? parent : null }), null);
+    }
+
+    async function openThread(threadId, detour, askAgain) {
+      const thread = threads[threadId];
+      const q = threadQuestion(thread);
       explorePrevScreen = viewingArchiveDate ? 'archive-detail' : 'today';
       detour = detour || null;
 
@@ -1101,12 +1215,12 @@
       const content = document.getElementById('js-explore-content');
       const run = ++exploreRun;
       const dateKey = viewingArchiveDate || todayKeyDate();
-      const historyKey = explorationKey(dateKey, expedition.headline, idx, detour);
+      const historyKey = explorationKey(dateKey, expedition.headline, thread.kind === 'q' ? thread.idx : 'ask:' + thread.text, detour);
 
       const saved = !askAgain && getExplorations()[historyKey];
       if (saved) {
         if (exploreController) exploreController.abort();
-        renderExploration(q, saved, idx, detour, saved.savedAt);
+        renderExploration(q, saved, threadId, detour, saved.savedAt);
         return;
       }
 
@@ -1143,27 +1257,24 @@
         const result = await streamExploration({
           date: dateKey,
           headline: expedition.headline,
-          questionIndex: idx,
           lens: detour || null,
-          // Only used for archive days saved before the server kept its own copy
-          doorway: expedition.doorway,
-          question: q.text,
+          ...threadPayload(thread),
         }, onText);
         if (run !== exploreRun) return;
         exploreRun++;
-        saveExploration(historyKey, result);
-        renderExploration(q, result, idx, detour);
+        saveExploration(historyKey, { ...result, question: q.text });
+        renderExploration(q, result, threadId, detour);
       } catch (err) {
         if (err.cancelled || run !== exploreRun) return;
         exploreRun++;
-        const retryArgs = idx + (detour ? `,'${escAttr(detour)}'` : '');
+        const retryArgs = threadId + (detour ? `,'${escAttr(detour)}'` : '');
         content.innerHTML = `
           <p class="explore-question">${esc(label)}</p>
           ${err.partial ? `<div class="explore-body">${proseHtml(err.partial, [])}</div>` : ''}
           <p class="error-msg">${err.partial ? 'The rest of this exploration didn\'t arrive.' : 'Could not load this exploration.'}
             <span class="error-detail">${esc(err.message)}</span>
           </p>
-          <button class="retry-btn" onclick="openQuestion(${retryArgs})">Try again</button>
+          <button class="retry-btn" onclick="openThread(${retryArgs})">Try again</button>
         `;
       }
     }
@@ -1218,14 +1329,17 @@
       `;
     }
 
-    function renderExploration(q, result, idx, detour, savedAt) {
+    function renderExploration(q, result, threadId, detour, savedAt) {
+      const thread = threads[threadId];
       const chips = DETOURS
         .filter(d => d !== detour)
-        .map(d => `<button class="detour-chip" onclick="openQuestion(${idx},'${escAttr(d)}')">${esc(d)}</button>`)
+        .map(d => `<button class="detour-chip" onclick="openThread(${threadId},'${escAttr(d)}')">${esc(d)}</button>`)
         .join('');
 
       const notes = [];
-      const askAgainArgs = `${idx},${detour ? `'${escAttr(detour)}'` : 'null'},true`;
+      const askAgainArgs = `${threadId},${detour ? `'${escAttr(detour)}'` : 'null'},true`;
+      // Follow-ups hang off one of the six threads, so the server can name it for context
+      const parent = thread.kind === 'q' ? thread.idx : thread.parent;
       if (result.grounded === false) notes.push('Written without a live web search — Google Search grounding was unavailable just now.');
       if (result.truncated) notes.push('This exploration reached its length limit and may end abruptly.');
 
@@ -1235,8 +1349,9 @@
         <div class="explore-body">${proseHtml(result.text, result.marks)}</div>
         ${notes.map(n => `<p class="explore-note">${esc(n)}</p>`).join('')}
         ${savedAt ? `<p class="explore-note">From your reading ${esc(formatSavedAt(savedAt))} ·
-          <button class="text-link-btn inline" onclick="openQuestion(${askAgainArgs})">Ask again</button></p>` : ''}
+          <button class="text-link-btn inline" onclick="openThread(${askAgainArgs})">Ask again</button></p>` : ''}
         ${sourcesListHtml(result)}
+        ${askFormHtml('js-ask-followup', 'Ask a follow-up', parent)}
         <div class="detour-section">
           <p class="detour-label">Explore through a different lens</p>
           <div class="detour-chips">${chips}</div>
