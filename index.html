@@ -283,6 +283,20 @@
     }
     .doorway-sources a:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
+    .since-link {
+      display: inline-block;
+      margin-top: 1.25rem;
+      font-family: var(--font-body);
+      font-size: 14px;
+      font-style: italic;
+      color: var(--accent);
+      background: none;
+      border: none;
+      border-bottom: 1px solid currentColor;
+      padding: 0 0 1px;
+      cursor: pointer;
+    }
+
     .conversation {
       margin-top: 1.5rem;
       padding: 0.9rem 1rem 0.6rem;
@@ -854,6 +868,8 @@
         ${listenControlsHtml(`${data.headline}. ${data.doorway}`)}
         ${sourcesHtml(data.sources)}
         ${conversationHtml(data)}
+        ${archived && viewingArchiveDate < todayKeyDate() ? `
+          <button class="since-link" onclick="openSince()">What's happened since? →</button>` : ''}
       `;
     }
 
@@ -1394,21 +1410,31 @@
     // Threads are registered once and referred to by number in onclick handlers.
     const threads = [];
     function threadFor(spec) {
-      const id = spec.kind === 'q' ? 'q' + spec.idx : 'ask:' + spec.text;
+      const id = spec.kind === 'q' ? 'q' + spec.idx : spec.kind === 'since' ? 'since' : 'ask:' + spec.text;
       let n = threads.findIndex(t => t.id === id);
       if (n === -1) n = threads.push({ ...spec, id }) - 1;
       return n;
     }
 
     function threadQuestion(t) {
-      return t.kind === 'q' ? expedition.questions[t.idx] : { tag: 'Your question', text: t.text };
+      if (t.kind === 'q') return expedition.questions[t.idx];
+      if (t.kind === 'since') return { tag: 'Since', text: `What's happened since ${formatArchiveDate(viewingArchiveDate)}?` };
+      return { tag: 'Your question', text: t.text };
+    }
+
+    function threadHistorySegment(t) {
+      return t.kind === 'q' ? t.idx : t.kind === 'since' ? 'since' : 'ask:' + t.text;
     }
 
     function threadPayload(t) {
-      return t.kind === 'q'
-        // doorway + question are only used for archive days saved before the server kept its own copy
-        ? { questionIndex: t.idx, doorway: expedition.doorway, question: expedition.questions[t.idx].text }
-        : { customQuestion: t.text, parentIndex: t.parent };
+      // doorway + question are only used for archive days saved before the server kept its own copy
+      if (t.kind === 'q') return { questionIndex: t.idx, doorway: expedition.doorway, question: expedition.questions[t.idx].text };
+      if (t.kind === 'since') return { since: true };
+      return { customQuestion: t.text, parentIndex: t.parent };
+    }
+
+    function openSince() {
+      return openThread(threadFor({ kind: 'since' }), null);
     }
 
     function openQuestion(idx, detour, askAgain) {
@@ -1431,7 +1457,7 @@
       const content = document.getElementById('js-explore-content');
       const run = ++exploreRun;
       const dateKey = viewingArchiveDate || todayKeyDate();
-      const historyKey = explorationKey(dateKey, expedition.headline, thread.kind === 'q' ? thread.idx : 'ask:' + thread.text, detour);
+      const historyKey = explorationKey(dateKey, expedition.headline, threadHistorySegment(thread), detour);
 
       const saved = !askAgain && getExplorations()[historyKey];
       if (saved) {
@@ -1569,10 +1595,11 @@
           <button class="text-link-btn inline" onclick="openThread(${askAgainArgs})">Ask again</button></p>` : ''}
         ${sourcesListHtml(result)}
         ${askFormHtml('js-ask-followup', 'Ask a follow-up', parent)}
+        ${thread.kind === 'since' ? '' : `
         <div class="detour-section">
           <p class="detour-label">Explore through a different lens</p>
           <div class="detour-chips">${chips}</div>
-        </div>
+        </div>`}
         ${reflectionBoxHtml(viewingArchiveDate || todayKeyDate())}
       `;
 
