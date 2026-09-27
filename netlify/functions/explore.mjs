@@ -72,7 +72,7 @@ export default async (req, context) => {
       throw new HttpError(404, "No expedition was saved for that day.");
     }
 
-    const events = await openExploration(version, question, lens);
+    const events = await openExploration(version, question, lens, body.date);
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {

@@ -6,9 +6,9 @@
 // but the person who asked. So nothing here is stored server-side — the reader's
 // own browser keeps it as their reading history.
 
-import { GEMINI_MODEL, LENS_GUIDE, HttpError, formatMarket } from "./expedition.mjs";
+import { GEMINI_MODEL, LENS_GUIDE, HttpError, formatMarket, describeDate, DATE_RE } from "./expedition.mjs";
 
-function explorePrompts(version, question, lens) {
+function explorePrompts(version, question, lens, dateKey) {
   const lensNote = lens ? `\n\nLens: ${LENS_GUIDE[lens]}` : "";
 
   const reporting = (version.reporting || [])
@@ -18,15 +18,22 @@ function explorePrompts(version, question, lens) {
     ? `\n\nWhat outlets reported when this story was chosen:\n${reporting}`
     : "";
 
+  // Without a date the model searches with its own sense of "now" (it has
+  // queried "Hormuz offer … 2018" for a 2026 story).
+  const storyDate = DATE_RE.test(version.date || "") ? version.date : dateKey;
+  const dateNote = DATE_RE.test(storyDate || "")
+    ? `\nThis story was chosen on ${describeDate(storyDate)}; today is ${describeDate(new Date().toISOString().slice(0, 10))}.`
+    : "";
+
   const markets = (version.signals?.polymarket || []).map((m) => `- ${formatMarket(m)}`).join("\n");
   const marketNote = markets ? `\n\nPrediction markets on this story when it was chosen:\n${markets}` : "";
 
   const systemPrompt = `You are a brilliant, measured intellectual guide for The Daily Expedition. You write with the depth and craft of a long-form magazine feature — flowing prose, not bullet points.
 
-Today's event: "${version.headline}"
+The event: "${version.headline}"${dateNote}
 Context: ${version.doorway}${reportingNote}${marketNote}
 
-Use Google Search to check current facts, figures, and developments before relying on them — especially anything about the event itself, which may have moved on. Draw on your broader knowledge for history and context. Never invent specifics.
+Use Google Search to check current facts, figures, and developments before relying on them — especially anything about the event itself, which may have moved on. Search for coverage from the story's date onward; don't mistake an older event with a similar name for this one. Draw on your broader knowledge for history and context. Never invent specifics.
 
 Write 4–5 substantive paragraphs exploring the question. Use a subheading only if genuinely needed. Every paragraph should reveal something. End with one sentence that opens a new direction, leaving the reader curious.${lensNote}`;
 
@@ -128,8 +135,8 @@ export function buildCitations(text, metadata) {
 // (bad key, quota) still reach the browser as a normal HTTP error. If grounding
 // itself is refused — e.g. its daily quota is used up — falls back to an
 // ungrounded answer rather than failing.
-export async function openExploration(version, question, lens) {
-  const { systemPrompt, userPrompt } = explorePrompts(version, question, lens);
+export async function openExploration(version, question, lens, dateKey) {
+  const { systemPrompt, userPrompt } = explorePrompts(version, question, lens, dateKey);
 
   let grounded = true;
   let upstream;
