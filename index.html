@@ -892,7 +892,7 @@
         ${conversationHtml(data)}
         ${archived && viewingArchiveDate < todayKeyDate() ? `
           <button class="since-link" onclick="openSince()">What's happened since? →</button>` : ''}
-        ${isSunday(viewingArchiveDate || todayKeyDate()) ? `
+        ${isSunday(viewingArchiveDate || todayKeyDate()) && weekHasEnoughDays(viewingArchiveDate || todayKeyDate()) ? `
           <button class="week-card" onclick="openWeek()">
             <span class="eyebrow">Sunday</span>
             <span class="week-card-title">The week in review</span>
@@ -1495,6 +1495,14 @@
 
     function isSunday(dateKey) {
       return new Date(dateKey + 'T12:00:00').getDay() === 0;
+    }
+
+    // Offer the week in review only when there's a week to review — the server
+    // needs three stored days, and the local archive is a good stand-in.
+    function weekHasEnoughDays(dateKey) {
+      const end = new Date(dateKey + 'T12:00:00').getTime();
+      const start = new Date(end - 6 * 86400000).toISOString().slice(0, 10);
+      return Object.keys(getArchive()).filter(k => k >= start && k <= dateKey).length >= 3;
     }
 
     function openQuestion(idx, detour, askAgain) {
