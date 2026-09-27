@@ -7,7 +7,7 @@
 
 import { LENS_GUIDE, DATE_RE, HttpError } from "../lib/expedition.mjs";
 import { openExploration } from "../lib/explore.mjs";
-import { openStore, getDay, bumpDailyCount } from "../lib/store.mjs";
+import { openStore, getDay, bumpDailyCount, getRecentDays } from "../lib/store.mjs";
 
 // Archive entries saved in the browser before server-side storage existed have no
 // stored record. Until this date they may send their own text (length-capped);
@@ -68,9 +68,26 @@ export default async (req, context) => {
     const stored = record ? findVersion(record, body.headline) : null;
     const isCustom = body.customQuestion != null;
     const isSince = body.since === true;
-    const legacy = !stored && !isCustom && !isSince && Date.now() < LEGACY_FALLBACK_UNTIL ? legacyVersion(body) : null;
+    const isWeek = body.week === true;
+    const legacy = !stored && !isCustom && !isSince && !isWeek && Date.now() < LEGACY_FALLBACK_UNTIL ? legacyVersion(body) : null;
 
-    if (stored && isSince) {
+    if (stored && isWeek) {
+      const days = [stored, ...(await getRecentDays(store, body.date, 6))]
+        .map((d) => ({ date: d.date, headline: d.headline, domain_tag: d.domain_tag, doorway: d.doorway }))
+        .reverse();
+      if (days.length < 3) {
+        throw new HttpError(400, `The week in review needs at least three days of stories — there ${days.length === 1 ? "is one" : `are ${days.length}`} so far.`);
+      }
+      // The reader's own journal lines, if they sent them: a few short entries from this week only
+      const inWeek = new Set(days.map((d) => d.date));
+      const reflections = (Array.isArray(body.reflections) ? body.reflections : [])
+        .filter((r) => r && inWeek.has(r.date) && typeof r.text === "string" && r.text.trim())
+        .slice(0, 7)
+        .map((r) => ({ date: r.date, text: r.text.replace(/\s+/g, " ").trim().slice(0, 600) }));
+      version = stored;
+      question = "The week in review";
+      asked = { week: { days, reflections } };
+    } else if (stored && isSince) {
       // "What's happened since" only makes sense once the day is behind us
       if (body.date >= new Date().toISOString().slice(0, 10)) {
         throw new HttpError(400, "This story is from today — check back tomorrow for what's happened since.");
