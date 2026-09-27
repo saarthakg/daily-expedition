@@ -1207,9 +1207,11 @@
     }
 
     function renderDoorwayError(err) {
+      const why = !navigator.onLine
+        ? "You're offline, and today's expedition hasn't been saved on this device yet. Your archive still works."
+        : "The expedition couldn't load today — if this keeps happening, check that GEMINI_API_KEY is set in your Netlify environment variables.";
       document.getElementById('js-doorway').innerHTML = `
-        <p class="error-msg">The expedition couldn't load today — this is usually a configuration issue.
-          Double-check that both API keys are set in your Netlify environment variables.
+        <p class="error-msg">${why}
           <span class="error-detail">${esc(err.message)}</span>
         </p>
         <button class="retry-btn" onclick="loadToday()">Try again</button>
@@ -1424,6 +1426,13 @@
         if (!finished) throw fail('The answer was cut short. Please try again.');
         return { ...finished, text };
       } catch (err) {
+        if (!navigator.onLine) {
+          throw fail("You're offline. Explorations you've already read still open; new ones need a connection.");
+        }
+        if (err instanceof TypeError && !text) {
+          // fetch() rejects with a TypeError when the server can't be reached at all
+          throw fail("Couldn't reach the server — check your connection. Explorations you've already read still open.");
+        }
         if (controller.signal.aborted) {
           throw Object.assign(fail(controller.signal.reason === 'timeout' ? 'Request timed out. Please try again.' : 'Cancelled.'), { cancelled: controller.signal.reason !== 'timeout' });
         }
@@ -1707,6 +1716,11 @@
     }
 
     init();
+
+    // Offline support (see sw.js). Registration failing just means no offline mode.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
+    }
   </script>
 </body>
 </html>

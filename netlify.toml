@@ -8,3 +8,9 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# Browsers must re-check the service worker on every visit so updates roll out
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
